@@ -1,10 +1,24 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Button } from 'react-native';
+import React, { useState } from 'react';
+import HistoryScreen from './HistoryScreen'; 
 
 export default function App() {
+  const [activeScreen, setActiveScreen] = useState("home"); 
+
   return (
     <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
+      {activeScreen === "home" ? (
+        <>
+          <Text>Welcome to the Home Screen!</Text>
+          <Button title="Go to History" onPress={() => setActiveScreen("history")} />
+        </>
+      ) : (
+        <>
+          <HistoryScreen />
+          <Button title="Back to Home" onPress={() => setActiveScreen("home")} />
+        </>
+      )}
       <StatusBar style="auto" />
     </View>
   );
