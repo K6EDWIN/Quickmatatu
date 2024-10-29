@@ -10,8 +10,7 @@
 - libsql_client for database connections (Turso)
 - Uvicorn as ASGI server
 
-# Setup and Installation
-Backend
+## Setup and Installation for Backend
 # Clone the repository
 git clone [repository-url]
 
@@ -21,11 +20,11 @@ cd [project-directory]/backend
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the server
+ # Run the server
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-Frontend
-# Navigate to the frontend directory
+## Setup and Installation for Frontend
+#Navigate to the frontend directory
 cd [project-directory]/frontend
 
 # Install dependencies
