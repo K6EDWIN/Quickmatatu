@@ -42,7 +42,7 @@ class Trip(BaseModel):
     date: str
     route: str
     status: str = "unknown"
-
+    
 @app.get("/drivers/{driver_id}/trip-history", response_model=List[Trip])
 def get_trip_history(driver_id: int, date: Optional[str] = Query(None)):
     """Fetch trip history for a specific driver, optionally filtered by date."""
