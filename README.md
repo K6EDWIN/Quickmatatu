@@ -2,13 +2,11 @@
 
 # Frontend
 - React with Expo
-- Axios for API requests
 
 # Backend
+-express
 - FastAPI
-- Pydantic for data validation
 - libsql_client for database connections (Turso)
-- Uvicorn as ASGI server
 
 ## Setup and Installation for Backend
 # Clone the repository
@@ -21,22 +19,12 @@ cd [project-directory]/backend
 pip install -r requirements.txt
 
  # Run the server
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-## Setup and Installation for Frontend
-#Navigate to the frontend directory
-cd [project-directory]/frontend
+node server.js
 
 # Install dependencies
 npm install
 
 # Start the Expo development server
-expo start
-
-## API Endpoints
-GET /drivers/{driver_id}/trip-history
-- Fetches trip history for a specific driver
-- Optional query parameter: date (YYYY-MM-DD)
-
+expo start 
 ## Database
 The project uses a Turso database. Ensure you have the correct DB_URL and AUTH_TOKEN in the environment variables.
