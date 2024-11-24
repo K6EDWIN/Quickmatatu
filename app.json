@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/favicon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -16,13 +16,27 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/favicon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.QuickMatatu"
+      "package": "com.otogano.QuickMatatu"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "@rnmapbox/maps",
+        {
+          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibXVuZ2FpIiwiYSI6ImNtMnl6NjUzZDA1ZHoyanM4cGV2MHYzemgifQ.J-HRBEQNT5dGaRahbILAkAw"
+        }
+      ]
+    ],
+    "newArchEnabled": true,
+    "extra": {
+      "eas": {
+        "projectId": "b49c3150-53a3-4fe7-b680-3acd5462bfe2"
+      }
     }
   }
 }
