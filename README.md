@@ -30,4 +30,4 @@ expo start
 
 #Run on web platform 
 ## Database
-The project uses a Turso database. Ensure you have the correct DB_URL and AUTH_TOKEN in the environment variables.
+The project uses a Turso database. 
