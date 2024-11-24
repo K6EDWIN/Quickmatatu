@@ -15,16 +15,19 @@ git clone [repository-url]
 # Navigate to the backend directory
 cd [project-directory]/backend
 
-# Install dependencies
-pip install -r requirements.txt
 
  # Run the server
 node server.js
 
 # Install dependencies
-npm install
+npm install -g expo-cli
+
+npm install @rnmapbox/maps expo-location react-native-gesture-handler react-native-reanimated react-native-screens react-native-safe-area-context react-native-svg react-native-fast-image
+
 
 # Start the Expo development server
 expo start 
+
+#Run on web platform 
 ## Database
 The project uses a Turso database. Ensure you have the correct DB_URL and AUTH_TOKEN in the environment variables.
