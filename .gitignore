@@ -36,3 +36,4 @@ yarn-error.*
 
 
 package-lock.json
+.vercel

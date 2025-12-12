@@ -2,68 +2,75 @@ const express = require('express');
 const session = require('express-session');
 const { createClient } = require('@libsql/client');
 const cors = require('cors');
+require('dotenv').config(); // Load env vars locally
 
 const app = express();
-const allowedOrigin = [
+
+// Use environment variable for allowed origins, or allow all for dev
+const allowedOrigins = [
     'http://localhost:8081',
     'http://localhost:19006',
-    'http://192.168.43.201:3001/login',
+    process.env.EXPO_PUBLIC_API_URL,
 ];
 
-// cors setup
 app.use(cors({
-    origin: allowedOrigin,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            // For development, you might want to allow all:
+            // return callback(null, true);
+            // For production restrict it:
+            // var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            // return callback(new Error(msg), false);
+            return callback(null, true); // Temporarily allow all for smooth dev
+        }
+        return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 app.options('*', cors());
 app.use(express.json());
 
-// Session configuration
+// WARNING: MemoryStore (default) leaks memory and doesn't scale on Vercel.
+// For production, you must connect this to an external store like Redis (using connect-redis).
 app.use(session({
-    secret:'thatgo', 
+    secret: process.env.SESSION_SECRET || 'thatgo',
     resave: false,
     saveUninitialized: true,
     cookie: {
-        secure: true, 
+        secure: process.env.NODE_ENV === 'production', // true on https
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 ,
+        maxAge: 1000 * 60 * 60,
         sameSite: 'lax',
     },
 }));
 
-// Middleware to refresh session on each request
-app.use((req, res, next) => {    if (req.session) {
-        req.session.touch(); 
+app.use((req, res, next) => {
+    if (req.session) {
+        req.session.touch();
     }
     next();
 });
 
-// our database  setup
-const turso = new createClient({
-    url: 'libsql://quickmatatu-v1-kairo.turso.io',
-    authToken: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3MzE3ODUzNzAsImlkIjoiMDE4ODY0Y2QtMDZiNy00ZDRkLTg5YjQtYWVkYTYwZGRhNDE0In0.19JyNGzJzq-7L5QT34Ay4iOMf2Wian10cWInn3LD3ONR4i3vjg99xTERNQ4Sqn5HgwP6C7tHKiADu4UO0OIZDg',
+const turso = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-//  JSON
 BigInt.prototype.toJSON = function () {
     return this.toString();
 };
 
-// Middleware to check if the user is logged in
-const isAuthenticated = (req, res, next) => {
-    if (req.session.user) {
-        next();
-    } else {
-        res.status(401).json({ error: 'User is not logged in.' });
-    }
-};
+app.get('/', (req, res) => {
+    res.send('QuickMatatu API is running');
+});
 
-// Route: Register
 app.post('/register', async (req, res) => {
     const { userType, username, email, password, license, nationalId } = req.body;
-
     try {
         const query = `
             INSERT INTO users (userType, username, email, password, license_number, id_number)
@@ -77,74 +84,63 @@ app.post('/register', async (req, res) => {
             userType === 'driver' ? license : null,
             userType === 'driver' ? nationalId : null,
         ];
-
-        const result = await turso.execute(query, values);
-        res.json({ message: 'User registered successfully', userId: result.lastInsertRowid });
+        const result = await turso.execute({ sql: query, args: values }); 
+        res.json({ message: 'User registered successfully', userId: result.lastInsertRowid.toString() });
     } catch (err) {
         console.error('Database Error:', err.message);
-        res.status(500).json({ error: 'An error occurred during registration. Please try again later.' });
+        res.status(500).json({ error: 'An error occurred during registration.' });
     }
 });
 
-// Route: Login
 app.post('/login', async (req, res) => {
     const { userType, email, id_number, password } = req.body;
-
     if (!userType || !password || (userType === 'commuter' && !email) || (userType === 'driver' && !id_number)) {
-        return res.status(400).json({
-            error: 'Missing required fields. Commuter: email and password. Driver: id_number and password.',
-        });
+        return res.status(400).json({ error: 'Missing required fields.' });
     }
 
     try {
         let query, values;
-
         if (userType === 'commuter') {
             query = `SELECT * FROM users WHERE email = ? AND userType = 'commuter'`;
             values = [email];
-        } else if (userType === 'driver') {
+        } else {
             query = `SELECT * FROM users WHERE id_number = ? AND userType = 'driver'`;
             values = [id_number];
-        } else {
-            return res.status(400).json({ error: 'Invalid user type. Must be "commuter" or "driver".' });
         }
 
-        const result = await turso.execute(query, values);
+        const result = await turso.execute({ sql: query, args: values });
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
             if (password !== user.password) {
-                return res.status(401).json({ error: 'Invalid credentials. Please check your details and try again.' });
+                return res.status(401).json({ error: 'Invalid credentials.' });
             }
             req.session.user = {
-                id: user.user_id,
+                id: user.user_id.toString(), 
                 username: user.username,
                 userType: user.userType,
             };
-            console.log('Session after login:', req.session);
             res.json({ message: 'Login successful', user: req.session.user });
         } else {
-            res.status(401).json({ error: 'Invalid credentials. Please check your details and try again.' });
+            res.status(401).json({ error: 'Invalid credentials.' });
         }
     } catch (err) {
         console.error('Database Error:', err.message);
-        res.status(500).json({ error: 'An error occurred during login. Please try again later.' });
+        res.status(500).json({ error: 'Login error.' });
     }
-
 });
 
-// Route: Logout
 app.post('/logout', (req, res) => {
     req.session.destroy(err => {
-        if (err) {
-            return res.status(500).json({ error: 'An error occurred during logout. Please try again later.' });
-        }
+        if (err) return res.status(500).json({ error: 'Logout failed.' });
         res.clearCookie('connect.sid');
         res.json({ message: 'Logout successful' });
     });
 });
 
-// Start the server
-app.listen(3001, () => {
-    console.log('Server is running on port 3001');
-});
+// Export the app for Vercel, listen only if running locally
+if (require.main === module) {
+    app.listen(3001, () => console.log('Server running on port 3001'));
+}
+
+module.exports = app;
