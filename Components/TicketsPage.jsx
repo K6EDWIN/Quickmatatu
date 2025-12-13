@@ -6,11 +6,12 @@ import {
   Text, 
   View, 
   FlatList, 
-  Image, 
   Alert, 
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView 
+  SafeAreaView,
+  Platform,
+  Image
 } from 'react-native';
 import Foundation from 'react-native-vector-icons/Foundation';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -19,13 +20,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const { width } = Dimensions.get('window');
 
-// Define API URL dynamically
-const API_URL = process.env.EXPO_PUBLIC_API_URL 
-  ? `${process.env.EXPO_PUBLIC_API_URL}/api`
-  : 'http://localhost:3001/api';
-
 const TicketsPage = ({ navigation }) => {
-    const [viewMode, setViewMode] = useState('MyTickets'); // 'MyTickets' or 'BookTicket'
     const [routes, setRoutes] = useState([]);
     const [selectedRoute, setSelectedRoute] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -33,77 +28,77 @@ const TicketsPage = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [commuterId, setCommuterId] = useState(null);
 
-    // Fetch Routes and User Data
+    // SAFE API URL LOGIC
+    const getApiUrl = (endpoint) => {
+        let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+        const baseUrl = url.replace(/\/api\/?$/, '').replace(/\/$/, '');
+        return `${baseUrl}/api/${endpoint}`;
+    };
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch Routes (Ensure your server has this endpoint)
-            const routeRes = await fetch(`${API_URL}/routes`);
+            // 1. Fetch Routes
+            const routeRes = await fetch(getApiUrl('routes'));
             const routeData = await routeRes.json();
             
-            if (Array.isArray(routeData)) {
+            if (routeRes.ok && Array.isArray(routeData)) {
                 setRoutes(routeData);
-                // Default select the first route
-                if (routeData.length > 0 && !selectedRoute) {
-                    setSelectedRoute(routeData[0]);
-                }
+            } else {
+                console.error("Routes fetch failed:", routeData);
+                // Optional: Set fallback data for testing if API fails
+                // setRoutes([{route_id: 1, route_name: 'Test Route', start_point: 'A', end_point: 'B', estimated_duration: '30 mins'}]);
             }
 
             // 2. Fetch User Session
-            // Note: In a real app, you might store this in a global Context instead of fetching every time
-            const userRes = await fetch(`${API_URL}/get_user`, { credentials: 'include' });
+            const userRes = await fetch(getApiUrl('get_user'), { credentials: 'include' });
             if (userRes.ok) {
                 const userData = await userRes.json();
                 setCommuterId(userData.commuterId || userData.user?.id);
             }
+
         } catch (error) {
-            console.error("Fetch Error:", error);
-            // Fallback mock data for UI testing if server fails
-            setRoutes([
-                { route_id: 1, route_name: 'Super Metro', start_point: 'Nairobi', end_point: 'Juja', price: 100 },
-                { route_id: 2, route_name: 'Killeton', start_point: 'Westlands', end_point: 'Kileleshwa', price: 80 },
-                { route_id: 3, route_name: 'Metro Trans', start_point: 'CBD', end_point: 'Utawala', price: 120 },
-            ]);
+            console.error("Network Error:", error);
+            // Alert.alert("Connection Error", "Could not connect to server.");
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [selectedRoute]);
+    }, []);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        fetchData();
-    };
-
     const handleBookTicket = async () => {
         if (!selectedRoute) {
-            Alert.alert('Error', 'Please select a route.');
+            Alert.alert('Selection Required', 'Please select a route to book.');
             return;
         }
-
-        // Allow booking even if session fetch failed (for testing), or block strictly:
-        // if (!commuterId) { Alert.alert('Error', 'Please log in again.'); return; }
+        
+        if (!commuterId) {
+             Alert.alert('Login Required', 'You must be logged in to book a ticket.', [
+                 { text: 'Login', onPress: () => navigation.navigate('Login') },
+                 { text: 'Cancel', style: 'cancel'}
+             ]);
+             return;
+        }
 
         setBookingLoading(true);
 
-        const currentTime = new Date();
-        const randomMinutes = Math.floor(Math.random() * 11) + 10; 
-        currentTime.setMinutes(currentTime.getMinutes() + randomMinutes);
+        // Generate a pickup time (Current time + 15 mins)
+        const pickupTime = new Date();
+        pickupTime.setMinutes(pickupTime.getMinutes() + 15);
 
         const payload = {
-            commuter_id: commuterId || 1, // Fallback ID for testing
-            matatu_id: 1,
-            route_id: selectedRoute.route_id,
-            pickup_point: selectedRoute.start_point,
-            estimated_pickup_time: currentTime.toISOString(),
+            commuter_id: commuterId,
+            route_id: selectedRoute.route_id, 
+            pickup_point: selectedRoute.start_point, 
+            estimated_pickup_time: pickupTime.toISOString(),
         };
 
         try {
-            const response = await fetch(`${API_URL}/book-ticket`, {
+            const response = await fetch(getApiUrl('book-ticket'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -114,151 +109,135 @@ const TicketsPage = ({ navigation }) => {
             
             if (response.ok) {
                 Alert.alert('Success', 'Ticket booked successfully!', [
-                    { text: 'OK', onPress: () => setViewMode('MyTickets') }
+                    { text: 'View Ticket', onPress: () => navigation.navigate("HistoryScreenUser") }
                 ]);
             } else {
-                Alert.alert('Failed', data.error || 'Could not book ticket.');
+                Alert.alert('Booking Failed', data.error || 'Unknown error');
             }
         } catch (error) {
-            Alert.alert('Network Error', 'Could not connect to server.');
+            Alert.alert('Error', 'Could not connect to server.');
         } finally {
             setBookingLoading(false);
         }
     };
 
-    // --- SUB-COMPONENTS ---
-
-    const renderHeader = (title, showBack = false) => (
-        <View style={styles.headerContainer}>
-            {showBack && (
-                <TouchableOpacity onPress={() => setViewMode('MyTickets')} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="black" />
-                </TouchableOpacity>
-            )}
-            <Text style={styles.headerTitle}>{title}</Text>
-            <View style={{ width: 24 }} /> {/* Spacer for centering */}
-        </View>
-    );
-
-    const renderMyTickets = () => (
-        <View style={styles.centerContent}>
-            {renderHeader("My Tickets")}
-            <View style={styles.emptyStateContainer}>
-                <View style={styles.circleIcon}>
-                    <MaterialCommunityIcons name="ticket-confirmation-outline" size={60} color="#ccc" />
+    const renderRouteCard = ({ item }) => {
+        const isSelected = selectedRoute?.route_id === item.route_id;
+        return (
+            <TouchableOpacity
+                style={[styles.card, isSelected && styles.cardSelected]}
+                onPress={() => setSelectedRoute(item)}
+                activeOpacity={0.8}
+            >
+                <View style={styles.cardHeader}>
+                    <View style={[styles.iconContainer, isSelected && {backgroundColor: 'rgba(0,185,122,0.1)'}]}>
+                         <Ionicons name="bus" size={24} color={isSelected ? "rgb(0,185,122)" : "black"} />
+                    </View>
+                    <View style={styles.cardTexts}>
+                        <Text style={styles.routeName}>{item.route_name}</Text>
+                        <Text style={styles.routeDuration}>
+                            <Ionicons name="time-outline" size={14} color="#666" /> {item.estimated_duration || 'N/A'}
+                        </Text>
+                    </View>
+                    <View style={styles.radio}>
+                        {isSelected ? (
+                            <Ionicons name="radio-button-on" size={24} color="rgb(0,185,122)" />
+                        ) : (
+                            <Ionicons name="radio-button-off" size={24} color="#ccc" />
+                        )}
+                    </View>
                 </View>
-                <Text style={styles.emptyTitle}>No Active Tickets</Text>
-                <Text style={styles.emptySubtitle}>You haven't booked any trips yet.</Text>
-                
-                <TouchableOpacity 
-                    style={styles.primaryButton} 
-                    onPress={() => setViewMode('BookTicket')}
-                >
-                    <Text style={styles.primaryButtonText}>Buy a Ticket</Text>
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
 
-    const renderBookTicket = () => (
-        <View style={{ flex: 1 }}>
-            {renderHeader("Select Route", true)}
-            
-            <View style={styles.listContainer}>
-                {loading ? (
-                    <ActivityIndicator size="large" color="black" style={{ marginTop: 50 }} />
-                ) : (
-                    <FlatList
-                        data={routes}
-                        keyExtractor={(item) => item.route_id.toString()}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                        contentContainerStyle={{ paddingBottom: 100 }}
-                        ListHeaderComponent={
-                            <Text style={styles.sectionLabel}>Available Routes</Text>
-                        }
-                        renderItem={({ item }) => {
-                            const isSelected = selectedRoute?.route_id === item.route_id;
-                            return (
-                                <TouchableOpacity
-                                    style={[styles.routeCard, isSelected && styles.routeCardSelected]}
-                                    onPress={() => setSelectedRoute(item)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={styles.routeRow}>
-                                        {/* Placeholder Icon/Image */}
-                                        <View style={[styles.routeIcon, { backgroundColor: isSelected ? 'black' : '#f0f0f0' }]}>
-                                             <Ionicons name="bus-outline" size={24} color={isSelected ? 'white' : 'black'} />
-                                        </View>
-                                        
-                                        <View style={styles.routeInfo}>
-                                            <Text style={styles.routeName}>{item.route_name}</Text>
-                                            <Text style={styles.routePath}>
-                                                {item.start_point} <AntDesign name="arrowright" /> {item.end_point}
-                                            </Text>
-                                        </View>
+                <View style={styles.cardBody}>
+                    <View style={styles.locationRow}>
+                        <Text style={styles.locationText}>{item.start_point}</Text>
+                        <AntDesign name="arrowright" size={16} color="#bbb" style={{marginHorizontal: 10}}/>
+                        <Text style={styles.locationText}>{item.end_point}</Text>
+                    </View>
+                    {item.intermediary_stops ? (
+                        <Text style={styles.stopsText} numberOfLines={1}>
+                            Via: {item.intermediary_stops}
+                        </Text>
+                    ) : null}
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
-                                        {/* Radio Button Visual */}
-                                        <View style={styles.radioContainer}>
-                                            {isSelected ? (
-                                                <Ionicons name="radio-button-on" size={24} color="rgb(0,185,122)" />
-                                            ) : (
-                                                <Ionicons name="radio-button-off" size={24} color="#ccc" />
-                                            )}
-                                        </View>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        }}
-                    />
-                )}
-            </View>
-
-            {/* Floating Bottom Action Bar */}
-            <View style={styles.footerAction}>
+    return (
+        <SafeAreaView style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
                 <View>
-                    <Text style={styles.totalLabel}>Selected Route</Text>
-                    <Text style={styles.totalPrice}>
+                    <Text style={styles.headerTitle}>Select Route</Text>
+                    <Text style={styles.headerSubtitle}>Where are you going today?</Text>
+                </View>
+                {/* Optional: Add user avatar here if fetched */}
+            </View>
+
+            {/* List */}
+            {loading ? (
+                <View style={styles.centerLoading}>
+                    <ActivityIndicator size="large" color="rgb(0,185,122)" />
+                    <Text style={{marginTop: 10, color: '#666'}}>Finding routes...</Text>
+                </View>
+            ) : (
+                <FlatList
+                    data={routes}
+                    keyExtractor={(item) => item.route_id.toString()}
+                    renderItem={renderRouteCard}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />
+                    }
+                    ListEmptyComponent={
+                        <View style={styles.emptyState}>
+                            <MaterialCommunityIcons name="bus-alert" size={50} color="#ccc" />
+                            <Text style={styles.emptyText}>No routes available right now.</Text>
+                        </View>
+                    }
+                />
+            )}
+
+            {/* Bottom Booking Action */}
+            <View style={styles.footer}>
+                <View style={styles.selectionInfo}>
+                    <Text style={styles.footerLabel}>Selected Route</Text>
+                    <Text style={styles.footerValue} numberOfLines={1}>
                         {selectedRoute ? selectedRoute.route_name : 'None'}
                     </Text>
                 </View>
                 <TouchableOpacity 
-                    style={[styles.bookButton, !selectedRoute && { backgroundColor: '#ccc' }]}
+                    style={[styles.bookButton, !selectedRoute && styles.disabledButton]}
                     onPress={handleBookTicket}
                     disabled={!selectedRoute || bookingLoading}
                 >
                     {bookingLoading ? (
                         <ActivityIndicator color="white" />
                     ) : (
-                        <Text style={styles.bookButtonText}>Book Now</Text>
+                        <>
+                            <Text style={styles.bookButtonText}>Book Ticket</Text>
+                            <AntDesign name="arrowright" size={16} color="white" style={{marginLeft: 8}}/>
+                        </>
                     )}
                 </TouchableOpacity>
             </View>
-        </View>
-    );
 
-    return (
-        <SafeAreaView style={styles.page}>
-            <View style={styles.container}>
-                {viewMode === 'MyTickets' ? renderMyTickets() : renderBookTicket()}
-            </View>
-
-            {/* Bottom Navigation Bar */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserHomepage")}>
+            {/* Navigation Bar */}
+            <View style={styles.navBar}>
+                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserHomepage")}>
                     <Foundation name='home' size={24} color="#aaa" />
                     <Text style={styles.navText}>Home</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("HistoryUser")}>
+                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("HistoryScreenUser")}>
                     <MaterialCommunityIcons name='history' size={24} color="#aaa" />
                     <Text style={styles.navText}>History</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity style={styles.navItem} onPress={() => {}}>
                     <Ionicons name='ticket' size={24} color="black" />
-                    <Text style={[styles.navText, { color: 'black', fontWeight: 'bold' }]}>Tickets</Text>
+                    <Text style={[styles.navText, {color:'black', fontWeight:'bold'}]}>Tickets</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Account")}>
                     <AntDesign name='user' size={24} color="#aaa" />
                     <Text style={styles.navText}>Profile</Text>
@@ -269,199 +248,196 @@ const TicketsPage = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    page: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
     container: {
         flex: 1,
-        backgroundColor: '#f9f9f9', // Light grey background for content
+        backgroundColor: '#F5F5F5',
+        paddingTop: Platform.OS === 'android' ? 30 : 0
     },
-    
-    // Header
-    headerContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    header: {
         paddingHorizontal: 20,
-        paddingTop: 15,
-        paddingBottom: 15,
-        backgroundColor: 'white',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: 'black',
-    },
-    backButton: {
-        padding: 5,
-    },
-
-    // Empty State
-    centerContent: {
-        flex: 1,
-        backgroundColor: 'white',
-    },
-    emptyStateContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 40,
-    },
-    circleIcon: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#f5f5f5',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    emptyTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 10,
-        color: '#333',
-    },
-    emptySubtitle: {
-        fontSize: 14,
-        color: '#888',
-        textAlign: 'center',
-        marginBottom: 30,
-    },
-    primaryButton: {
-        backgroundColor: 'black',
-        paddingVertical: 14,
-        paddingHorizontal: 40,
-        borderRadius: 30,
-        elevation: 3,
-    },
-    primaryButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-
-    // Route Selection List
-    listContainer: {
-        flex: 1,
-        padding: 15,
-    },
-    sectionLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#666',
-        marginBottom: 10,
-        marginLeft: 5,
-        textTransform: 'uppercase',
-    },
-    routeCard: {
-        flexDirection: 'row',
-        backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 15,
-        marginBottom: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'transparent',
+        paddingTop: 10,
+        paddingBottom: 20,
+        backgroundColor: '#fff',
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 5,
-        elevation: 2,
+        elevation: 5,
+        zIndex: 10,
     },
-    routeCardSelected: {
-        borderColor: 'rgb(0,185,122)',
-        backgroundColor: '#F0FDF4', // Very light green bg
+    headerTitle: {
+        fontSize: 26,
+        fontWeight: 'bold',
+        color: '#111',
     },
-    routeRow: {
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        marginTop: 4,
+    },
+    centerLoading: {
         flex: 1,
-        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    routeIcon: {
-        width: 45,
-        height: 45,
-        borderRadius: 25,
+    listContent: {
+        padding: 15,
+        paddingBottom: 160, // Space for footer + navbar
+        paddingTop: 20,
+    },
+    card: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 18,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#f0f0f0',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    cardSelected: {
+        borderColor: 'rgb(0,185,122)',
+        backgroundColor: '#F0FFF8',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    iconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#f8f8f8',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
     },
-    routeInfo: {
+    cardTexts: {
         flex: 1,
     },
     routeName: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: 'bold',
         color: '#333',
-        marginBottom: 4,
+        marginBottom: 2,
     },
-    routePath: {
+    routeDuration: {
         fontSize: 13,
         color: '#666',
     },
-    radioContainer: {
+    cardBody: {
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)',
+        paddingTop: 15,
+    },
+    locationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    locationText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#444',
+    },
+    stopsText: {
+        marginTop: 8,
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+    },
+    radio: {
         marginLeft: 10,
     },
-
-    // Footer Action
-    footerAction: {
+    emptyState: {
+        alignItems: 'center',
+        marginTop: 60,
+    },
+    emptyText: {
+        color: '#888',
+        fontSize: 16,
+        marginTop: 10,
+    },
+    // Footer
+    footer: {
+        position: 'absolute',
+        bottom: 70, // Height of nav bar
+        left: 20, 
+        right: 20,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
+        elevation: 20,
+        marginBottom: 10,
+    },
+    selectionInfo: {
+        flex: 1,
+        marginRight: 10,
+    },
+    footerLabel: {
+        fontSize: 12,
+        color: '#888',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    footerValue: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#111',
+    },
+    bookButton: {
+        backgroundColor: 'rgb(0,185,122)',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    disabledButton: {
+        backgroundColor: '#ddd',
+        elevation: 0,
+    },
+    bookButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 15,
+    },
+    // NavBar
+    navBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingVertical: 12,
+        backgroundColor: '#fff',
+        borderTopWidth: 1,
+        borderTopColor: '#f0f0f0',
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'white',
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#eee',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        elevation: 10,
-    },
-    totalLabel: {
-        fontSize: 12,
-        color: '#888',
-    },
-    totalPrice: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: 'black',
-    },
-    bookButton: {
-        backgroundColor: 'rgb(0,185,122)',
-        paddingVertical: 12,
-        paddingHorizontal: 30,
-        borderRadius: 10,
-    },
-    bookButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-
-    // Bottom Bar
-    bottomBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingVertical: 12,
-        backgroundColor: 'white',
-        borderTopWidth: 1,
-        borderTopColor: '#eee',
+        paddingBottom: Platform.OS === 'ios' ? 20 : 12, // Safe area for iPhone
     },
     navItem: {
         alignItems: 'center',
+        paddingHorizontal: 10,
     },
     navText: {
         fontSize: 10,
         marginTop: 4,
         color: '#aaa',
+        fontWeight: '500',
     },
 });
 

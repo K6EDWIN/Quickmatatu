@@ -39,8 +39,8 @@ const turso = createClient({
 
 BigInt.prototype.toJSON = function () { return this.toString(); };
 
-// Ensure Table Exists
-async function ensureTableExists() {
+// Ensure Tables Exist
+async function ensureTablesExist() {
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,24 +52,51 @@ async function ensureTableExists() {
             id_number TEXT
         )
     `);
+
+    // Ensure routes table exists (you likely already have this based on your prompt)
+    await turso.execute(`
+        CREATE TABLE IF NOT EXISTS routes (
+            route_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            route_name TEXT,
+            start_point TEXT,
+            end_point TEXT,
+            intermediary_stops TEXT,
+            estimated_duration TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            longitude DECIMAL(10, 8),
+            latitude DECIMAL(10, 8)
+        )
+    `);
+
+    await turso.execute(`
+        CREATE TABLE IF NOT EXISTS tickets (
+            ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            commuter_id TEXT,
+            route_id INTEGER,
+            pickup_point TEXT,
+            booking_time TEXT,
+            status TEXT DEFAULT 'active'
+        )
+    `);
 }
+
+// Initialize tables on startup
+ensureTablesExist().catch(console.error);
 
 router.get('/', (req, res) => res.send('QuickMatatu API is running'));
 
-// --- UPDATED REGISTER ROUTE ---
+// --- AUTH ROUTES ---
+
 router.post('/register', async (req, res) => {
+    // ... (Your existing register logic) ...
     console.log("Register Request:", req.body);
     const { userType, username, email, password, license, nationalId } = req.body;
     
-    // Validate Email for everyone now
     if (!username || !password || !userType || !email) {
         return res.status(400).json({ error: 'Missing required fields (Email is required)' });
     }
 
     try {
-        await ensureTableExists();
-
-        // Check if email already exists
         const check = await turso.execute({
             sql: "SELECT * FROM users WHERE email = ?",
             args: [email]
@@ -83,11 +110,10 @@ router.post('/register', async (req, res) => {
             INSERT INTO users (userType, username, email, password, license_number, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
-        // Save email for BOTH drivers and commuters
         const values = [
             userType, 
             username, 
-            email, // Always save email
+            email, 
             password,
             userType === 'driver' ? license : null,
             userType === 'driver' ? nationalId : null,
@@ -102,19 +128,16 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// --- UPDATED LOGIN ROUTE ---
 router.post('/login', async (req, res) => {
+    // ... (Your existing login logic) ...
     console.log("Login Request:", req.body);
-    const { email, password } = req.body; // Removed userType and id_number requirement
+    const { email, password } = req.body; 
     
     if (!email || !password) {
         return res.status(400).json({ error: 'Please provide email and password.' });
     }
 
     try {
-        await ensureTableExists();
-
-        // Find user by EMAIL only
         const result = await turso.execute({ 
             sql: "SELECT * FROM users WHERE email = ?", 
             args: [email] 
@@ -126,14 +149,12 @@ router.post('/login', async (req, res) => {
                 return res.status(401).json({ error: 'Invalid credentials.' });
             }
             
-            // Save session
             req.session.user = { 
                 id: user.user_id.toString(), 
                 username: user.username, 
                 userType: user.userType 
             };
 
-            // Return userType so frontend knows where to navigate
             res.json({ 
                 message: 'Login successful', 
                 user: req.session.user 
@@ -146,6 +167,56 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ error: 'Login error: ' + err.message });
     }
 });
+
+router.get('/get_user', (req, res) => {
+    if (req.session.user) {
+        res.json({ user: req.session.user, commuterId: req.session.user.id });
+    } else {
+        res.status(401).json({ error: 'Not logged in' });
+    }
+});
+
+router.post('/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.clearCookie('connect.sid');
+        res.json({ message: 'Logout successful' });
+    });
+});
+
+// --- ROUTE & TICKET ROUTES ---
+
+router.get('/routes', async (req, res) => {
+    try {
+        const result = await turso.execute("SELECT * FROM routes");
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Fetch Routes Error:", err);
+        res.status(500).json({ error: "Failed to fetch routes" });
+    }
+});
+
+router.post('/book-ticket', async (req, res) => {
+    const { commuter_id, route_id, pickup_point, estimated_pickup_time } = req.body;
+
+    if (!commuter_id || !route_id) {
+        return res.status(400).json({ error: "Missing booking details" });
+    }
+
+    try {
+        const result = await turso.execute({
+            sql: `INSERT INTO tickets (commuter_id, route_id, pickup_point, booking_time) 
+                  VALUES (?, ?, ?, ?)`,
+            args: [commuter_id, route_id, pickup_point, estimated_pickup_time]
+        });
+
+        res.json({ message: "Ticket booked successfully", ticketId: result.lastInsertRowid.toString() });
+
+    } catch (err) {
+        console.error("Booking Error:", err);
+        res.status(500).json({ error: "Booking failed" });
+    }
+});
+
 
 app.use('/api', router);
 
