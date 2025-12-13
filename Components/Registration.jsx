@@ -122,10 +122,7 @@ const RegistrationForm = ({ navigation }) => {
       nationalId
     };
 
-    console.log("Registering with:", userData);
-
     try {
-      // Updated to use dynamic API URL and /api prefix
       const response = await fetch(`${API_URL}/api/register`, {
         method: 'POST',
         headers: {
@@ -136,12 +133,10 @@ const RegistrationForm = ({ navigation }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('User registered successfully:', data);
         Alert.alert('Success', 'Registration successful!');
         navigation.navigate("Login");
       } else {
         const errorData = await response.json();
-        console.error('Registration failed:', errorData);
         Alert.alert('Registration failed', errorData.message || errorData.error);
       }
     } catch (error) {
@@ -156,7 +151,11 @@ const RegistrationForm = ({ navigation }) => {
         <Text style={styles.header}>Register</Text>
         <View style={styles.userTypeContainer}>
           <TouchableOpacity
-            style={styles.button}
+            style={[
+              styles.button, 
+              // If commuter, use black (default), otherwise use grey
+              { backgroundColor: userType === 'commuter' ? 'black' : 'grey' }
+            ]}
             onPress={() => {
               setVisibleComponent('CommuterRegistration');
               setUserType('commuter');
@@ -165,7 +164,11 @@ const RegistrationForm = ({ navigation }) => {
             <Text style={styles.buttonText}>Commuter</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.button}
+            style={[
+              styles.button,
+              // If driver, use black, otherwise use grey
+              { backgroundColor: userType === 'driver' ? 'black' : 'grey' }
+            ]}
             onPress={() => {
               setVisibleComponent('DriverRegistration');
               setUserType('driver');
