@@ -1,26 +1,25 @@
 const express = require('express');
 const session = require('express-session');
-const { createClient } = require('@libsql/client/http'); 
+const { createClient } = require('@libsql/client/http');
 const cors = require('cors');
-require('dotenv').config(); 
+require('dotenv').config();
 
 const app = express();
-const router = express.Router(); 
+const router = express.Router();
 
-// Use environment variable for allowed origins, or allow all for dev
+// Allow connections from Expo (Development) and Production
 const allowedOrigins = [
     'http://localhost:8081',
     'http://localhost:19006',
-    process.env.EXPO_PUBLIC_API_URL,
+    process.env.EXPO_PUBLIC_API_URL, 
 ];
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
+        // Allow requests with no origin (like mobile apps)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            // For development, allow all. For strict production, uncomment the error.
-            return callback(null, true); 
+            return callback(null, true); // Dev mode: allow all
         }
         return callback(null, true);
     },
@@ -32,49 +31,68 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
-// WARNING: MemoryStore leaks memory. For production, use connect-redis or similar.
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thatgo',
     resave: false,
     saveUninitialized: true,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // true on https
+        secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 1000 * 60 * 60,
         sameSite: 'lax',
     },
 }));
 
-app.use((req, res, next) => {
-    if (req.session) {
-        req.session.touch();
-    }
-    next();
-});
-
 const turso = createClient({
     url: process.env.TURSO_DATABASE_URL,
     authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-BigInt.prototype.toJSON = function () {
-    return this.toString();
-};
+// --- AUTO-INITIALIZE DATABASE ---
+// This runs once when the server starts to ensure the table exists
+(async () => {
+    try {
+        await turso.execute(`
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                userType TEXT NOT NULL,
+                username TEXT,
+                email TEXT,
+                password TEXT NOT NULL,
+                license_number TEXT,
+                id_number TEXT
+            )
+        `);
+        console.log("Database table 'users' verified.");
+    } catch (err) {
+        console.error("Failed to initialize database:", err.message);
+    }
+})();
 
+BigInt.prototype.toJSON = function () { return this.toString(); };
 
-// GET /api/
+// --- ROUTES ---
+
 router.get('/', (req, res) => {
     res.send('QuickMatatu API is running');
 });
 
-// POST /api/register
 router.post('/register', async (req, res) => {
+    console.log("Register Request Received:", req.body); // LOGGING ADDED
+
     const { userType, username, email, password, license, nationalId } = req.body;
+    
+    // Basic validation
+    if (!username || !password || !userType) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     try {
         const query = `
             INSERT INTO users (userType, username, email, password, license_number, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
+        // For commuter: license & id are NULL. For driver: email is NULL.
         const values = [
             userType,
             username,
@@ -83,18 +101,21 @@ router.post('/register', async (req, res) => {
             userType === 'driver' ? license : null,
             userType === 'driver' ? nationalId : null,
         ];
-        const result = await turso.execute({ sql: query, args: values }); 
+
+        const result = await turso.execute({ sql: query, args: values });
+        console.log("User created with ID:", result.lastInsertRowid);
         res.json({ message: 'User registered successfully', userId: result.lastInsertRowid.toString() });
     } catch (err) {
         console.error('Database Error:', err.message);
-        res.status(500).json({ error: 'An error occurred during registration.' });
+        res.status(500).json({ error: 'Registration failed: ' + err.message });
     }
 });
 
-// POST /api/login
 router.post('/login', async (req, res) => {
+    console.log("Login Request Received:", req.body);
     const { userType, email, id_number, password } = req.body;
-    if (!userType || !password || (userType === 'commuter' && !email) || (userType === 'driver' && !id_number)) {
+    
+    if (!userType || !password) {
         return res.status(400).json({ error: 'Missing required fields.' });
     }
 
@@ -116,7 +137,7 @@ router.post('/login', async (req, res) => {
                 return res.status(401).json({ error: 'Invalid credentials.' });
             }
             req.session.user = {
-                id: user.user_id.toString(), 
+                id: user.user_id.toString(),
                 username: user.username,
                 userType: user.userType,
             };
@@ -130,7 +151,6 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// POST /api/logout
 router.post('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) return res.status(500).json({ error: 'Logout failed.' });
@@ -139,10 +159,8 @@ router.post('/logout', (req, res) => {
     });
 });
 
-//mount router at /api
 app.use('/api', router);
 
-// Export the app for Vercel, listen only if running locally
 if (require.main === module) {
     app.listen(3001, () => console.log('Server running on port 3001'));
 }

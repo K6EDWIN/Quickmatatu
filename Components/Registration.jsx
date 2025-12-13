@@ -14,8 +14,10 @@ const RegistrationForm = ({ navigation }) => {
 
   const [visibleComponent, setVisibleComponent] = useState('CommuterRegistration');
 
-  // Use environment variable, fallback to localhost for development
-  const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+  // SAFE API URL: If the env var is missing, it will warn you in the console
+  const API_URL = process.env.EXPO_PUBLIC_API_URL 
+    ? `${process.env.EXPO_PUBLIC_API_URL}/api/register`
+    : 'http://localhost:3001/api/register';
 
   const renderInputs = () => {
     if (visibleComponent === 'CommuterRegistration') {
@@ -36,6 +38,7 @@ const RegistrationForm = ({ navigation }) => {
               onChangeText={setEmail}
               value={email}
               keyboardType="email-address"
+              autoCapitalize="none"
             />
             <TextInput
               style={styles.input}
@@ -68,11 +71,12 @@ const RegistrationForm = ({ navigation }) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email (Optional)"
               placeholderTextColor="#aaa"
               onChangeText={setEmail}
               value={email}
               keyboardType="email-address"
+              autoCapitalize="none"
             />
             <TextInput
               style={styles.input}
@@ -111,6 +115,18 @@ const RegistrationForm = ({ navigation }) => {
   };
 
   const handleRegister = async () => {
+    console.log("Register button pressed.");
+    
+    // 1. Validate fields before sending
+    if (!username || !password) {
+        Alert.alert("Missing Info", "Please enter a username and password.");
+        return;
+    }
+    if (userType === 'commuter' && !email) {
+        Alert.alert("Missing Info", "Please enter an email address.");
+        return;
+    }
+
     const userData = {
       userType,
       username,
@@ -122,8 +138,11 @@ const RegistrationForm = ({ navigation }) => {
       nationalId
     };
 
+    console.log(`Sending request to: ${API_URL}`);
+    console.log("Payload:", userData);
+
     try {
-      const response = await fetch(`${API_URL}/api/register`, {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -131,17 +150,23 @@ const RegistrationForm = ({ navigation }) => {
         body: JSON.stringify(userData),
       });
 
+      const data = await response.json(); // Try to parse JSON
+
       if (response.ok) {
-        const data = await response.json();
-        Alert.alert('Success', 'Registration successful!');
-        navigation.navigate("Login");
+        console.log('Success:', data);
+        Alert.alert('Success', 'Registration successful!', [
+            { text: "OK", onPress: () => navigation.navigate("Login") }
+        ]);
       } else {
-        const errorData = await response.json();
-        Alert.alert('Registration failed', errorData.message || errorData.error);
+        console.error('Server Error:', data);
+        Alert.alert('Registration Failed', data.error || data.message || "Unknown server error");
       }
     } catch (error) {
-      console.error('An error occurred:', error);
-      Alert.alert('Error', 'Unable to connect to the server. Please try again.');
+      console.error('Network Error:', error);
+      Alert.alert(
+        'Connection Error', 
+        `Could not connect to server at ${API_URL}.\n\nCheck your internet connection.`
+      );
     }
   };
 
@@ -153,7 +178,6 @@ const RegistrationForm = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.button, 
-              // If commuter, use black (default), otherwise use grey
               { backgroundColor: userType === 'commuter' ? 'black' : 'grey' }
             ]}
             onPress={() => {
@@ -166,7 +190,6 @@ const RegistrationForm = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.button,
-              // If driver, use black, otherwise use grey
               { backgroundColor: userType === 'driver' ? 'black' : 'grey' }
             ]}
             onPress={() => {
