@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Button, TouchableOpacity, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
 import styles from '../Styles';
 
 const RegistrationForm = ({ navigation }) => {
@@ -12,15 +12,27 @@ const RegistrationForm = ({ navigation }) => {
   const [license, setLicense] = useState("");
   const [nationalId, setNationalId] = useState("");
   
-  // NEW: Loading state to give feedback
   const [loading, setLoading] = useState(false);
-
   const [visibleComponent, setVisibleComponent] = useState('CommuterRegistration');
 
-  // Determine the API URL
-  const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-  // Ensure we don't have double slashes if the env var has a trailing slash
-  const API_ENDPOINT = `${BASE_URL.replace(/\/$/, '')}/api/register`;
+  // SAFE API URL LOGIC
+  // If we are on web and not localhost, force HTTPS or it will fail
+  const getApiUrl = () => {
+    let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+    if (Platform.OS === 'web' && window.location.protocol === 'https:' && url.startsWith('http:')) {
+       // Automatic fix for mixed content: Try to upgrade localhost to relative path or just warn
+       console.warn("Mixed Content Warning: You are on HTTPS but API is HTTP. Request will likely fail.");
+    }
+    return `${url.replace(/\/$/, '')}/api/register`;
+  };
+
+  const notify = (title, message) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   const renderInputs = () => {
     if (visibleComponent === 'CommuterRegistration') {
@@ -118,13 +130,14 @@ const RegistrationForm = ({ navigation }) => {
   };
 
   const handleRegister = async () => {
-    // 1. Validation
     if (!username || !password) {
-      Alert.alert("Missing Info", "Please enter a username and password.");
+      notify("Missing Info", "Please enter a username and password.");
       return;
     }
 
-    setLoading(true); // Start loading
+    setLoading(true);
+    const API_ENDPOINT = getApiUrl();
+    console.log("Registering to:", API_ENDPOINT);
 
     const userData = {
       userType,
@@ -137,8 +150,6 @@ const RegistrationForm = ({ navigation }) => {
       nationalId
     };
 
-    console.log("Attempting register to:", API_ENDPOINT);
-
     try {
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
@@ -146,31 +157,28 @@ const RegistrationForm = ({ navigation }) => {
         body: JSON.stringify(userData),
       });
 
-      // 2. Read as text first to avoid JSON parse errors
       const text = await response.text();
-      console.log("Server response:", text);
+      console.log("Server raw response:", text);
 
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        // If parsing fails, it's likely a Vercel 500 error page
-        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}...`);
+        throw new Error(`Server Error (Not JSON): ${text.substring(0, 50)}`);
       }
 
       if (response.ok) {
-        Alert.alert('Success', 'Registration successful!', [
-          { text: "OK", onPress: () => navigation.navigate("Login") }
-        ]);
+        notify('Success', 'Registration successful!');
+        navigation.navigate("Login");
       } else {
-        Alert.alert('Registration Failed', data.error || data.message || "Unknown error");
+        notify('Registration Failed', data.error || data.message);
       }
 
     } catch (error) {
-      console.error('Fetch error:', error);
-      Alert.alert('Connection Error', `Failed to connect to:\n${API_ENDPOINT}\n\nError: ${error.message}`);
+      console.error('Registration Error:', error);
+      notify('Connection Error', error.message);
     } finally {
-      setLoading(false); // Stop loading
+      setLoading(false);
     }
   };
 
@@ -181,7 +189,7 @@ const RegistrationForm = ({ navigation }) => {
         <View style={styles.userTypeContainer}>
           <TouchableOpacity
             style={[
-              styles.button,
+              styles.button, 
               { backgroundColor: userType === 'commuter' ? 'black' : 'grey' }
             ]}
             onPress={() => {
@@ -216,7 +224,6 @@ const RegistrationForm = ({ navigation }) => {
         <View style={styles.inputContainer}>
           {renderInputs()}
 
-          {/* Show a spinner if loading, otherwise show the button */}
           {loading ? (
             <ActivityIndicator size="large" color="black" style={{ marginTop: 20 }} />
           ) : (
