@@ -7,10 +7,6 @@ A mobile application designed to enhance the reliability and efficiency of Kenya
 
 It supports core features for both commuters and matatu operators, designed to optimize schedules, reduce wait times, and increase profitability.
 
-*(**Note:** Add your own screenshots/GIFs here. Upload them to your GitHub repo and replace the links.)*
-![Wireframe: User Homepage](https://via.placeholder.com/300x600.png?text=User+Homepage+Screenshot)
-![Wireframe: Driver Homepage](https://via.placeholder.com/300x600.png?text=Driver+Homepage+Screenshot)
-
 ## ✨ Features
 
 The system is designed with two primary user types: Commuters and Drivers.
@@ -56,14 +52,13 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 1.  **Clone the repository:**
     ```sh
-    git clone [https://github.com/YourUsername/YourRepoName.git](https://github.com/YourUsername/YourRepoName.git)
-    cd YourRepoName
+    git clone [https://github.com/K6EDWIN/Quickmatatu.git]
+    cd Qyuickmatatu
     ```
 2.  **Install the required packages:**
     ```sh
     npm install
     ```
-    *(or `yarn install`)*
 
 ## 🚀 Usage
 
