@@ -1,53 +1,60 @@
-import React from 'react';
+import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { UserTypeProvider } from './UserTypeContext'; 
 
-// Import your screens
-import WelcomeScreen from './Components/WelcomeScreen';
-import Registration from './Components/Registration';
-import LoginForm from './Components/LoginForm';
-import UserHomepage from './Components/UserScreen'; 
+// Import your existing components
+import LoginForm from "./Components/LoginForm";
+import RegistrationForm from "./Components/Registration";
 import DriverHomepage from './Components/DriverHomepage';
-import MapScreen from './Components/Map';
-import AccountScreen from './Components/AccountScreen';
-import HistoryScreenUser from './Components/HistoryScreenUser';
-import HistoryScreenDriver from './Components/HistoryScreenDriver';
-import RealTimeTrackingScreen from './Components/RealTimeTrackingScreen';
-import TicketsPage from './Components/TicketsPage';
+import RealTimeTrackingScreen from "./Components/RealTimeTrackingScreen";
 import RatingPage from './Components/RatingPage';
+import AccountScreen from './Components/AccountScreen';
+import HistoryScreenDriver from './Components/HistoryScreenDriver';
+import HistoryScreenUser from './Components/HistoryScreenUser';
+import TicketsPage from './Components/TicketsPage';
+
+// Import the Welcome Screen
+import WelcomeScreen from './Components/WelcomeScreen';
 
 const Stack = createNativeStackNavigator();
 
-export default function App() {
+const App = () => {
   return (
-    <UserTypeProvider>
-      <NavigationContainer>
-        {}
-        <Stack.Navigator 
-          initialRouteName="Welcome"
-          screenOptions={{ headerShown: false }} 
-        >
-          {/* Auth Screens */}
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="Registration" component={Registration} />
-          <Stack.Screen name="Login" component={LoginForm} />
+    <NavigationContainer>
+      {/* Changed initialRouteName to "Welcome" */}
+      <Stack.Navigator initialRouteName="Welcome">
+        
+        {/* Add Welcome Screen to the Stack */}
+        <Stack.Screen 
+          name="Welcome" 
+          component={WelcomeScreen} 
+          options={{ headerShown: false }} 
+        />
 
-          {/* User Screens */}
-          <Stack.Screen name="UserHomepage" component={UserHomepage} />
-          <Stack.Screen name="Map" component={MapScreen} />
-          <Stack.Screen name="Account" component={AccountScreen} />
-          <Stack.Screen name="HistoryUser" component={HistoryScreenUser} />
-          <Stack.Screen name="Tracking" component={RealTimeTrackingScreen} />
-          <Stack.Screen name="Tickets" component={TicketsPage} />
-          <Stack.Screen name="Rating" component={RatingPage} />
-
-          {/* Driver Screens */}
-          <Stack.Screen name="DriverHomepage" component={DriverHomepage} />
-          <Stack.Screen name="HistoryDriver" component={HistoryScreenDriver} />
-          
-        </Stack.Navigator>
-      </NavigationContainer>
-    </UserTypeProvider>
+        <Stack.Screen 
+          name="Registration" 
+          component={RegistrationForm} 
+          options={{ headerTitle: "Register" }}
+        />
+        
+        <Stack.Screen 
+          name="Login" 
+          component={LoginForm} 
+          options={{ headerTitle: "Login" }}
+        />
+        
+        {/* UserHomepage to RealTimeTrackingScreen  */}
+        <Stack.Screen name="UserHomepage" component={RealTimeTrackingScreen} />
+        <Stack.Screen name="DriverHomepage" component={DriverHomepage} />
+        <Stack.Screen name="RatingPage" component={RatingPage} />
+        <Stack.Screen name="UserAccount" component={AccountScreen} />
+        <Stack.Screen name="HistoryScreenDriver" component={HistoryScreenDriver} />
+        <Stack.Screen name="HistoryScreenUser" component={HistoryScreenUser} />
+        <Stack.Screen name="TicketsPage" component={TicketsPage} />
+        
+      </Stack.Navigator>
+    </NavigationContainer>
   );
-}
+};
+
+export default App;
