@@ -7,20 +7,6 @@ require('dotenv').config();
 const app = express();
 const router = express.Router();
 
-// --- CONFIGURATION CHECK ---
-const DB_URL = process.env.TURSO_DATABASE_URL;
-const DB_TOKEN = process.env.TURSO_AUTH_TOKEN;
-
-if (!DB_URL || !DB_TOKEN) {
-    console.error("CRITICAL ERROR: Missing Database Env Variables!");
-}
-
-const turso = DB_URL && DB_TOKEN ? createClient({
-    url: DB_URL,
-    authToken: DB_TOKEN,
-}) : null;
-
-// Allow connections
 const allowedOrigins = [
     'http://localhost:8081',
     'http://localhost:19006',
@@ -32,7 +18,7 @@ app.use(cors({
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            callback(null, true); // Dev mode: allow all
+            callback(null, true); 
         }
     },
     credentials: true,
@@ -46,15 +32,21 @@ app.use(session({
     cookie: { secure: process.env.NODE_ENV === 'production', sameSite: 'lax' },
 }));
 
-// --- HELPER: Ensure Table Exists ---
+const turso = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+});
+
+BigInt.prototype.toJSON = function () { return this.toString(); };
+
+// Ensure Table Exists
 async function ensureTableExists() {
-    if (!turso) throw new Error("Database not connected (Missing Env Vars)");
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             userType TEXT NOT NULL,
             username TEXT,
-            email TEXT,
+            email TEXT UNIQUE,
             password TEXT NOT NULL,
             license_number TEXT,
             id_number TEXT
@@ -62,48 +54,40 @@ async function ensureTableExists() {
     `);
 }
 
-// --- HEALTH CHECK ROUTE ---
-// Hit this URL in your browser: https://your-app.vercel.app/api/health
-router.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        database: turso ? 'connected' : 'missing_credentials',
-        env: {
-            hasUrl: !!process.env.TURSO_DATABASE_URL,
-            hasToken: !!process.env.TURSO_AUTH_TOKEN
-        }
-    });
-});
+router.get('/', (req, res) => res.send('QuickMatatu API is running'));
 
+// --- UPDATED REGISTER ROUTE ---
 router.post('/register', async (req, res) => {
     console.log("Register Request:", req.body);
     const { userType, username, email, password, license, nationalId } = req.body;
     
-    if (!username || !password || !userType) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    // Validate Email for everyone now
+    if (!username || !password || !userType || !email) {
+        return res.status(400).json({ error: 'Missing required fields (Email is required)' });
     }
 
     try {
         await ensureTableExists();
 
-        // Check if user exists
+        // Check if email already exists
         const check = await turso.execute({
-            sql: "SELECT * FROM users WHERE email = ? OR username = ?",
-            args: [email || "", username]
+            sql: "SELECT * FROM users WHERE email = ?",
+            args: [email]
         });
 
         if (check.rows.length > 0) {
-             return res.status(409).json({ error: 'User already exists' });
+             return res.status(409).json({ error: 'Email already registered' });
         }
 
-        // Insert
         const query = `
             INSERT INTO users (userType, username, email, password, license_number, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
+        // Save email for BOTH drivers and commuters
         const values = [
-            userType, username, 
-            userType === 'commuter' ? email : null,
+            userType, 
+            username, 
+            email, // Always save email
             password,
             userType === 'driver' ? license : null,
             userType === 'driver' ? nationalId : null,
@@ -118,30 +102,44 @@ router.post('/register', async (req, res) => {
     }
 });
 
+// --- UPDATED LOGIN ROUTE ---
 router.post('/login', async (req, res) => {
-    const { userType, email, id_number, password } = req.body;
-    try {
-        if (!turso) throw new Error("Database not connected");
-        
-        let query, values;
-        if (userType === 'commuter') {
-            query = `SELECT * FROM users WHERE email = ? AND userType = 'commuter'`;
-            values = [email];
-        } else {
-            query = `SELECT * FROM users WHERE id_number = ? AND userType = 'driver'`;
-            values = [id_number];
-        }
+    console.log("Login Request:", req.body);
+    const { email, password } = req.body; // Removed userType and id_number requirement
+    
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Please provide email and password.' });
+    }
 
-        const result = await turso.execute({ sql: query, args: values });
+    try {
+        await ensureTableExists();
+
+        // Find user by EMAIL only
+        const result = await turso.execute({ 
+            sql: "SELECT * FROM users WHERE email = ?", 
+            args: [email] 
+        });
+
         if (result.rows.length > 0) {
             const user = result.rows[0];
             if (password !== user.password) {
                 return res.status(401).json({ error: 'Invalid credentials.' });
             }
-            req.session.user = { id: user.user_id.toString(), username: user.username, userType: user.userType };
-            res.json({ message: 'Login successful', user: req.session.user });
+            
+            // Save session
+            req.session.user = { 
+                id: user.user_id.toString(), 
+                username: user.username, 
+                userType: user.userType 
+            };
+
+            // Return userType so frontend knows where to navigate
+            res.json({ 
+                message: 'Login successful', 
+                user: req.session.user 
+            });
         } else {
-            res.status(401).json({ error: 'Invalid credentials.' });
+            res.status(401).json({ error: 'User not found.' });
         }
     } catch (err) {
         console.error('Login Error:', err.message);
@@ -149,7 +147,6 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Mount router at /api
 app.use('/api', router);
 
 if (require.main === module) {

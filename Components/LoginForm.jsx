@@ -1,175 +1,129 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Button, TouchableOpacity, StyleSheet,ScrollView } from 'react-native';
-import styles from '../Styles';
+import React, { useState, useCallback } from "react";
+import { View, Text, TextInput, Button, TouchableOpacity, Alert, Platform, ActivityIndicator } from "react-native";
+import styles from "../Styles";
 
-const RegistrationForm = ({navigation}) => {
-  const [userType, setUserType] = useState("commuter");
-  const [username, setUsername] = useState("");
+const LoginForm = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [driverName, setDriverName] = useState("");
-  const [vehicleLicensePlate, setVehicleLicensePlate]= useState("");
-  const [license, setLicense] = useState("");
-  const [nationalId, setNationalId] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [visibleComponent,setVisibleComponent] = useState('CommuterRegistration');
+  // SAFE API URL LOGIC
+  const getApiUrl = () => {
+    let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
+    const baseUrl = url.replace(/\/api\/login\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
+    return `${baseUrl}/api/login`;
+  };
 
-  const setComponent =()=>{
-    if (visibleComponent === 'CommuterRegistration'){
-      return(<>
-        <View style={styles.container}>
-        <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Username"
-          placeholderTextColor="#aaa"
-          onChangeText={setUsername}
-          value={username}
-           />
-        <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#aaa"
-            onChangeText={setEmail}
-            value={email}
-            keyboardType="email-address" />
-        <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#aaa"
-            onChangeText={setPassword}
-            value={password}
-            secureTextEntry />
-            </View>
-            </View>
-        </>);
-    }else(visibleComponent === 'DriverRegistration')
-    {
-      return(
-        <>
-    <View style={styles.container}>
-      <View style={styles.inputContainer}>
-      <TextInput
-          style={styles.input}
-          placeholder="Username"
-          placeholderTextColor="#aaa"
-          onChangeText={setUsername}
-          value={username}
-           />
-           <TextInput
-          style={styles.input}
-          placeholder="Driver Name"
-          placeholderTextColor="#aaa"
-          onChangeText={setDriverName}
-          value={driverName}
-           />
-        <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#aaa"
-            onChangeText={setEmail}
-            value={email}
-            keyboardType="email-address" />
-        <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#aaa"
-            onChangeText={setPassword}
-            value={password}
-            secureTextEntry />
-            <TextInput
-          style={styles.input}
-          placeholder="Vehicle License Plate"
-          placeholderTextColor="#aaa"
-          onChangeText={setVehicleLicensePlate}
-          value={vehicleLicensePlate}
-           />
-    <TextInput
-        style={styles.input}
-        placeholder="Driver's License"
-        placeholderTextColor="#aaa"
-        onChangeText={setLicense}
-        value={license} />
-    <TextInput
-          style={styles.input}
-          placeholder="National ID"
-          placeholderTextColor="#aaa"
-          onChangeText={setNationalId}
-          value={nationalId} />
-          </View>
-          </View>
-    </>
-      );
+  const notify = (title, message) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+    } else {
+      Alert.alert(title, message);
     }
   };
- 
-  const handleRegister = async () => {
-    const userData = { userType,username,driverName, email, password,vehicleLicensePlate, license, nationalId};
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      notify("Error", "Please enter both email and password.");
+      return;
+    }
+
+    setLoading(true);
+    const API_ENDPOINT = getApiUrl();
+    console.log("Logging in to:", API_ENDPOINT);
 
     try {
-      const response = await fetch('http://localhost:3001/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
+      const response = await fetch(API_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
       });
 
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error(`Server Error: ${text.substring(0, 50)}...`);
+      }
+
+      console.log("Login response:", data);
 
       if (response.ok) {
-        const data = await response.json();
-        console.log('User registered successfully:', data);
-        alert('Registration successful!');
-        navigation.navigate("Login");
+        // Check User Type from Server Response to Navigate
+        const userType = data.user?.userType;
+        
+        if (userType === 'driver') {
+          navigation.navigate("DriverHomepage");
+        } else {
+          navigation.navigate("UserHomepage");
+        }
       } else {
-        const errorData = await response.json();
-        console.error('Registration failed:', errorData);
-        alert(`Registration failed: ${errorData.message}`);
+        notify("Login Failed", data.error || "Invalid credentials.");
       }
     } catch (error) {
-      console.error('An error occurred:', error);
-      alert('An error occurred during registration. Please try again.');
+      console.error("Login Error:", error);
+      notify("Connection Error", "Unable to connect to the server.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>Welcome Back</Text>
+      <Text style={[styles.label, { textAlign: 'center', marginBottom: 20 }]}>
+        Log in to your account
+      </Text>
 
-  const MainComponent= ({ setVisibleComponent}) =>{
-    return(
-      <>
-      <Text style={styles.header}>Register</Text>
-      <View style={styles.userTypeContainer}>
-        <TouchableOpacity
-          style={[styles.button]}
-          onPress={() => { setVisibleComponent('CommuterRegistration') && exportUserType()
-            setUserType('commuter');}}
-        >
-          <Text style={styles.buttonText}>Commuter</Text>
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Email Address"
+          placeholderTextColor="#aaa"
+          onChangeText={setEmail}
+          defaultValue={email}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#aaa"
+          onChangeText={setPassword}
+          defaultValue={password}
+          secureTextEntry
+        />
+
+        {/* Forgot Password Link (Visual only for now) */}
+        <TouchableOpacity style={{ alignSelf: 'flex-end', marginBottom: 20 }}>
+           <Text style={{ color: 'black' }}>Forgot Password?</Text>
         </TouchableOpacity>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="black" />
+        ) : (
+          <Button
+            title="Log In"
+            onPress={handleLogin}
+            color="black"
+            style={styles.button}
+          />
+        )}
+
         <TouchableOpacity
-          style={[styles.button]}
-          onPress={() => { setVisibleComponent('DriverRegistration') && exportUserType()
-            setUserType('driver');}}
+          onPress={() => {
+            navigation.navigate("Registration");
+          }}
+          style={{ marginTop: 15 }}
         >
-          <Text style={styles.buttonText}>Driver</Text>
+          <Text style={styles.linkText}>Don't have an account? Register Now</Text>
         </TouchableOpacity>
       </View>
-      </>
-    );
-  };
-  return (
-    <ScrollView style={{backgroundColor:'rgb(255, 255, 255)'}}>
-  <View style={styles.container}>
-        <MainComponent setVisibleComponent={setVisibleComponent}/>
-    <View style={styles.inputContainer}>
-    {setComponent()}
-
-    <Button title="Register" onPress={handleRegister} color="black" style={styles.submitButton}/>
-       <TouchableOpacity onPress={()=> navigation.navigate("Login")}>
-         <Text style={styles.linkText}>Already have an account? Login</Text>
-       </TouchableOpacity>
     </View>
-    </View>
-    </ScrollView>
-    );
+  );
 };
-export default RegistrationForm;
+
+export default LoginForm;
