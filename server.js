@@ -1,10 +1,12 @@
 const express = require('express');
 const session = require('express-session');
-const { createClient } = require('@libsql/client');
+// Use the HTTP driver for better compatibility in serverless environments
+const { createClient } = require('@libsql/client/http'); 
 const cors = require('cors');
 require('dotenv').config(); // Load env vars locally
 
 const app = express();
+const router = express.Router(); // Create a router instance
 
 // Use environment variable for allowed origins, or allow all for dev
 const allowedOrigins = [
@@ -18,12 +20,8 @@ app.use(cors({
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         if (allowedOrigins.indexOf(origin) === -1) {
-            // For development, you might want to allow all:
-            // return callback(null, true);
-            // For production restrict it:
-            // var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            // return callback(new Error(msg), false);
-            return callback(null, true); // Temporarily allow all for smooth dev
+            // For development, allow all. For strict production, uncomment the error.
+            return callback(null, true); 
         }
         return callback(null, true);
     },
@@ -35,8 +33,7 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
-// WARNING: MemoryStore (default) leaks memory and doesn't scale on Vercel.
-// For production, you must connect this to an external store like Redis (using connect-redis).
+// WARNING: MemoryStore leaks memory. For production, use connect-redis or similar.
 app.use(session({
     secret: process.env.SESSION_SECRET || 'thatgo',
     resave: false,
@@ -65,11 +62,15 @@ BigInt.prototype.toJSON = function () {
     return this.toString();
 };
 
-app.get('/', (req, res) => {
+// --- ROUTES MOVED TO ROUTER ---
+
+// GET /api/
+router.get('/', (req, res) => {
     res.send('QuickMatatu API is running');
 });
 
-app.post('/register', async (req, res) => {
+// POST /api/register
+router.post('/register', async (req, res) => {
     const { userType, username, email, password, license, nationalId } = req.body;
     try {
         const query = `
@@ -92,7 +93,8 @@ app.post('/register', async (req, res) => {
     }
 });
 
-app.post('/login', async (req, res) => {
+// POST /api/login
+router.post('/login', async (req, res) => {
     const { userType, email, id_number, password } = req.body;
     if (!userType || !password || (userType === 'commuter' && !email) || (userType === 'driver' && !id_number)) {
         return res.status(400).json({ error: 'Missing required fields.' });
@@ -130,13 +132,18 @@ app.post('/login', async (req, res) => {
     }
 });
 
-app.post('/logout', (req, res) => {
+// POST /api/logout
+router.post('/logout', (req, res) => {
     req.session.destroy(err => {
         if (err) return res.status(500).json({ error: 'Logout failed.' });
         res.clearCookie('connect.sid');
         res.json({ message: 'Logout successful' });
     });
 });
+
+// --- MOUNT ROUTER ---
+// This ensures all the routes above are prefixed with /api
+app.use('/api', router);
 
 // Export the app for Vercel, listen only if running locally
 if (require.main === module) {

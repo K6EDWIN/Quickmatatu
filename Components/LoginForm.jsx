@@ -1,136 +1,175 @@
-import styles from "../Styles";
-import { useState, useCallback } from "react";
-import { View, Text, TextInput, Button, TouchableOpacity, CheckBox, Alert } from "react-native";
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, TouchableOpacity, StyleSheet,ScrollView } from 'react-native';
+import styles from '../Styles';
 
-const LoginForm = ({ navigation }) => {
+const RegistrationForm = ({navigation}) => {
+  const [userType, setUserType] = useState("commuter");
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [idNumber, setIdNumber] = useState("");
-  const [isSelected, setSelection] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [driverName, setDriverName] = useState("");
+  const [vehicleLicensePlate, setVehicleLicensePlate]= useState("");
+  const [license, setLicense] = useState("");
+  const [nationalId, setNationalId] = useState("");
 
-  // for  state updates
-  const debounce = (func, delay) => {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), delay);
-    };
-  };
+  const [visibleComponent,setVisibleComponent] = useState('CommuterRegistration');
 
-  const handleEmailChange = useCallback(debounce((text) => setEmail(text), 100), []);
-  const handlePasswordChange = useCallback(debounce((text) => setPassword(text), 100), []);
-  const handleIdNumberChange = useCallback(debounce((text) => setIdNumber(text), 100), []);
-
-  const handleLogin = async () => {
-    // Check if required fields are missing
-    if ((!email && !isSelected) || (!idNumber && isSelected) || !password) {
-      Alert.alert("Error", "Please enter your details.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const payload = isSelected
-        ? { userType: "driver", id_number: idNumber, password }
-        : { userType: "commuter", email, password };
-      console.log("Payload sent:", payload);
-
-      const response = await fetch("http://localhost:3001/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-      console.log("Response data:", data);
-
-      if (response.ok) {
-        Alert.alert("Success", "Login successful!");
-        if (isSelected) {
-          navigation.navigate("DriverHomepage");
-        } else {
-          navigation.navigate("UserHomepage");
-        }
-      } else {
-        Alert.alert("Error", data.error || "Login failed. Please try again.");
-      }
-    } catch (error) {
-      console.error("Login Error:", error.message || error);
-      Alert.alert(
-        "Error",
-        "Unable to connect to the server. Please check your connection and try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Login</Text>
-
-      <View style={styles.inputContainer}>
-        {isSelected ? (
-          <TextInput
-            style={styles.input}
-            placeholder="Enter ID Number"
-            placeholderTextColor="#aaa"
-            onChangeText={handleIdNumberChange}
-            defaultValue={idNumber}
-            keyboardType="numeric"
-          />
-        ) : (
-          <TextInput
+  const setComponent =()=>{
+    if (visibleComponent === 'CommuterRegistration'){
+      return(<>
+        <View style={styles.container}>
+        <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Username"
+          placeholderTextColor="#aaa"
+          onChangeText={setUsername}
+          value={username}
+           />
+        <TextInput
             style={styles.input}
             placeholder="Email"
             placeholderTextColor="#aaa"
-            onChangeText={handleEmailChange}
-            defaultValue={email}
-            keyboardType="email-address"
-          />
-        )}
-
+            onChangeText={setEmail}
+            value={email}
+            keyboardType="email-address" />
         <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#aaa"
+            onChangeText={setPassword}
+            value={password}
+            secureTextEntry />
+            </View>
+            </View>
+        </>);
+    }else(visibleComponent === 'DriverRegistration')
+    {
+      return(
+        <>
+    <View style={styles.container}>
+      <View style={styles.inputContainer}>
+      <TextInput
           style={styles.input}
-          placeholder="Password"
+          placeholder="Username"
           placeholderTextColor="#aaa"
-          onChangeText={handlePasswordChange}
-          defaultValue={password}
-          secureTextEntry
-        />
+          onChangeText={setUsername}
+          value={username}
+           />
+           <TextInput
+          style={styles.input}
+          placeholder="Driver Name"
+          placeholderTextColor="#aaa"
+          onChangeText={setDriverName}
+          value={driverName}
+           />
+        <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#aaa"
+            onChangeText={setEmail}
+            value={email}
+            keyboardType="email-address" />
+        <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#aaa"
+            onChangeText={setPassword}
+            value={password}
+            secureTextEntry />
+            <TextInput
+          style={styles.input}
+          placeholder="Vehicle License Plate"
+          placeholderTextColor="#aaa"
+          onChangeText={setVehicleLicensePlate}
+          value={vehicleLicensePlate}
+           />
+    <TextInput
+        style={styles.input}
+        placeholder="Driver's License"
+        placeholderTextColor="#aaa"
+        onChangeText={setLicense}
+        value={license} />
+    <TextInput
+          style={styles.input}
+          placeholder="National ID"
+          placeholderTextColor="#aaa"
+          onChangeText={setNationalId}
+          value={nationalId} />
+          </View>
+          </View>
+    </>
+      );
+    }
+  };
+ 
+  const handleRegister = async () => {
+    const userData = { userType,username,driverName, email, password,vehicleLicensePlate, license, nationalId};
 
-        <View style={styles.checkboxContainer}>
-          <CheckBox
-            value={isSelected}
-            onValueChange={setSelection}
-            style={styles.checkbox}
-          />
-          <Text style={styles.label}>Are you a driver?🧑🏽‍💼</Text>
-        </View>
+    try {
+      const response = await fetch('http://localhost:3001/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
 
-        <Button
-          title={loading ? "Logging in..." : "Login"}
-          onPress={handleLogin}
-          color="black"
-          style={styles.button}
-          disabled={loading}
-        />
 
+      if (response.ok) {
+        const data = await response.json();
+        console.log('User registered successfully:', data);
+        alert('Registration successful!');
+        navigation.navigate("Login");
+      } else {
+        const errorData = await response.json();
+        console.error('Registration failed:', errorData);
+        alert(`Registration failed: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('An error occurred:', error);
+      alert('An error occurred during registration. Please try again.');
+    }
+  };
+
+
+  const MainComponent= ({ setVisibleComponent}) =>{
+    return(
+      <>
+      <Text style={styles.header}>Register</Text>
+      <View style={styles.userTypeContainer}>
         <TouchableOpacity
-          onPress={() => {
-            navigation.navigate("Registration");
-          }}
+          style={[styles.button]}
+          onPress={() => { setVisibleComponent('CommuterRegistration') && exportUserType()
+            setUserType('commuter');}}
         >
-          <Text style={styles.linkText}>Create an account🙂</Text>
+          <Text style={styles.buttonText}>Commuter</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button]}
+          onPress={() => { setVisibleComponent('DriverRegistration') && exportUserType()
+            setUserType('driver');}}
+        >
+          <Text style={styles.buttonText}>Driver</Text>
         </TouchableOpacity>
       </View>
-    </View>
-  );
-};
+      </>
+    );
+  };
+  return (
+    <ScrollView style={{backgroundColor:'rgb(255, 255, 255)'}}>
+  <View style={styles.container}>
+        <MainComponent setVisibleComponent={setVisibleComponent}/>
+    <View style={styles.inputContainer}>
+    {setComponent()}
 
-export default LoginForm;
+    <Button title="Register" onPress={handleRegister} color="black" style={styles.submitButton}/>
+       <TouchableOpacity onPress={()=> navigation.navigate("Login")}>
+         <Text style={styles.linkText}>Already have an account? Login</Text>
+       </TouchableOpacity>
+    </View>
+    </View>
+    </ScrollView>
+    );
+};
+export default RegistrationForm;
