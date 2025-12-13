@@ -12,13 +12,11 @@ import {
   SafeAreaView,
   Platform
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // IMPORTED
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Foundation from 'react-native-vector-icons/Foundation';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-
-const { width } = Dimensions.get('window');
 
 const TicketsPage = ({ navigation }) => {
     const [routes, setRoutes] = useState([]);
@@ -28,6 +26,18 @@ const TicketsPage = ({ navigation }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [commuterId, setCommuterId] = useState(null);
 
+    // 1. HELPER FOR ALERTS ON WEB & MOBILE
+    const notify = (title, message, buttons = []) => {
+        if (Platform.OS === 'web') {
+            window.alert(`${title}: ${message}`);
+            // Execute the 'OK' button action if it exists
+            const okButton = buttons.find(b => b.text === 'OK' || b.text === 'View Ticket');
+            if (okButton && okButton.onPress) okButton.onPress();
+        } else {
+            Alert.alert(title, message, buttons);
+        }
+    };
+
     // SAFE API URL LOGIC
     const getApiUrl = (endpoint) => {
         let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
@@ -35,11 +45,10 @@ const TicketsPage = ({ navigation }) => {
         return `${baseUrl}/api/${endpoint}`;
     };
 
-    // Fetch Data (Routes + User Session)
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch Routes from Server
+            // Fetch Routes
             const routeRes = await fetch(getApiUrl('routes'));
             const routeData = await routeRes.json();
             
@@ -49,11 +58,10 @@ const TicketsPage = ({ navigation }) => {
                 console.error("Routes fetch failed:", routeData);
             }
 
-            // 2. GET USER FROM LOCAL STORAGE (Fixes the "Nothing Happens" bug)
+            // Get User from Storage
             const session = await AsyncStorage.getItem('userSession');
             if (session) {
                 const user = JSON.parse(session);
-                // Handle 'id' or 'user_id' depending on how your DB returns it
                 const userId = user.id || user.user_id; 
                 console.log("Loaded User ID:", userId);
                 setCommuterId(userId);
@@ -63,7 +71,6 @@ const TicketsPage = ({ navigation }) => {
 
         } catch (error) {
             console.error("Data loading error:", error);
-            // Optional: Alert.alert("Connection Error", "Could not connect to server.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -75,24 +82,21 @@ const TicketsPage = ({ navigation }) => {
     }, [fetchData]);
 
     const handleBookTicket = async () => {
-        // 1. Validate Route Selection
+        console.log("Booking initiated...");
+
         if (!selectedRoute) {
-            Alert.alert('Selection Required', 'Please select a route to book.');
+            notify('Selection Required', 'Please select a route to book.');
             return;
         }
         
-        // 2. Validate User Login
         if (!commuterId) {
-             Alert.alert('Login Required', 'You must be logged in to book a ticket.', [
-                 { text: 'Login', onPress: () => navigation.navigate('Login') },
-                 { text: 'Cancel', style: 'cancel'}
-             ]);
+             notify('Login Required', 'You must be logged in to book a ticket.');
+             navigation.navigate('Login');
              return;
         }
 
         setBookingLoading(true);
 
-        // Generate a pickup time (Current time + 15 mins)
         const pickupTime = new Date();
         pickupTime.setMinutes(pickupTime.getMinutes() + 15);
 
@@ -103,6 +107,8 @@ const TicketsPage = ({ navigation }) => {
             estimated_pickup_time: pickupTime.toISOString(),
         };
 
+        console.log("Sending Payload:", payload);
+
         try {
             const response = await fetch(getApiUrl('book-ticket'), {
                 method: 'POST',
@@ -110,18 +116,26 @@ const TicketsPage = ({ navigation }) => {
                 body: JSON.stringify(payload),
             });
 
-            const data = await response.json();
+            const text = await response.text();
+            console.log("Server Response:", text);
+
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                throw new Error("Server returned non-JSON response");
+            }
             
             if (response.ok) {
-                Alert.alert('Success', 'Ticket booked successfully!', [
+                notify('Success', 'Ticket booked successfully!', [
                     { text: 'View Ticket', onPress: () => navigation.navigate("HistoryScreenUser") }
                 ]);
             } else {
-                Alert.alert('Booking Failed', data.error || 'Unknown error');
+                notify('Booking Failed', data.error || 'Unknown error');
             }
         } catch (error) {
             console.error("Booking Error:", error);
-            Alert.alert('Error', 'Could not connect to server.');
+            notify('Error', 'Could not connect to server. Check console for details.');
         } finally {
             setBookingLoading(false);
         }
@@ -172,7 +186,6 @@ const TicketsPage = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={styles.headerTitle}>Select Route</Text>
@@ -180,7 +193,6 @@ const TicketsPage = ({ navigation }) => {
                 </View>
             </View>
 
-            {/* List */}
             {loading ? (
                 <View style={styles.centerLoading}>
                     <ActivityIndicator size="large" color="rgb(0,185,122)" />
@@ -205,7 +217,6 @@ const TicketsPage = ({ navigation }) => {
                 />
             )}
 
-            {/* Bottom Booking Action */}
             <View style={styles.footer}>
                 <View style={styles.selectionInfo}>
                     <Text style={styles.footerLabel}>Selected Route</Text>
@@ -229,7 +240,6 @@ const TicketsPage = ({ navigation }) => {
                 </TouchableOpacity>
             </View>
 
-            {/* Navigation Bar */}
             <View style={styles.navBar}>
                  <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserHomepage")}>
                     <Foundation name='home' size={24} color="#aaa" />
@@ -289,7 +299,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 15,
-        paddingBottom: 160, // Space for footer + navbar
+        paddingBottom: 160,
         paddingTop: 20,
     },
     card: {
@@ -368,10 +378,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginTop: 10,
     },
-    // Footer
     footer: {
         position: 'absolute',
-        bottom: 70, // Height of nav bar
+        bottom: 70,
         left: 20, 
         right: 20,
         backgroundColor: '#fff',
@@ -386,7 +395,7 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 20,
         marginBottom: 10,
-        zIndex: 100, // Keeps button clickable
+        zIndex: 100,
     },
     selectionInfo: {
         flex: 1,
@@ -421,7 +430,6 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 15,
     },
-    // NavBar
     navBar: {
         flexDirection: 'row',
         justifyContent: 'space-around',
@@ -433,7 +441,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 12, // Safe area for iPhone
+        paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     },
     navItem: {
         alignItems: 'center',
