@@ -13,17 +13,15 @@ const RegistrationForm = ({ navigation }) => {
   const [nationalId, setNationalId] = useState("");
   
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false); // New state for success view
   const [visibleComponent, setVisibleComponent] = useState('CommuterRegistration');
 
   // SAFE API URL LOGIC
-  // If we are on web and not localhost, force HTTPS or it will fail
   const getApiUrl = () => {
     let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-    if (Platform.OS === 'web' && window.location.protocol === 'https:' && url.startsWith('http:')) {
-       // Automatic fix for mixed content: Try to upgrade localhost to relative path or just warn
-       console.warn("Mixed Content Warning: You are on HTTPS but API is HTTP. Request will likely fail.");
-    }
-    return `${url.replace(/\/$/, '')}/api/register`;
+    // Remove duplicated /api/register paths if they exist in env var
+    const baseUrl = url.replace(/\/api\/register\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
+    return `${baseUrl}/api/register`;
   };
 
   const notify = (title, message) => {
@@ -168,16 +166,23 @@ const RegistrationForm = ({ navigation }) => {
       }
 
       if (response.ok) {
-        notify('Success', 'Registration successful!');
-        navigation.navigate("Login");
+        // SUCCESS: Show spinner screen instead of Alert
+        setIsSuccess(true);
+        
+        // Wait 2 seconds, then navigate to Login
+        setTimeout(() => {
+            setIsSuccess(false);
+            setLoading(false);
+            navigation.navigate("Login");
+        }, 2000);
       } else {
         notify('Registration Failed', data.error || data.message);
+        setLoading(false);
       }
 
     } catch (error) {
       console.error('Registration Error:', error);
       notify('Connection Error', error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -216,6 +221,22 @@ const RegistrationForm = ({ navigation }) => {
     );
   };
 
+  // 1. SUCCESS VIEW (Replaces Form when successful)
+  if (isSuccess) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color="black" />
+          <Text style={{ marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>
+              Registration Successful!
+          </Text>
+          <Text style={{ marginTop: 10, color: '#666' }}>
+              Redirecting to Login...
+          </Text>
+      </View>
+    );
+  }
+
+  // 2. STANDARD FORM VIEW
   return (
     <ScrollView style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
       <View style={styles.container}>
