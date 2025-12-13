@@ -1,12 +1,11 @@
 const express = require('express');
 const session = require('express-session');
-// Use the HTTP driver for better compatibility in serverless environments
 const { createClient } = require('@libsql/client/http'); 
 const cors = require('cors');
-require('dotenv').config(); // Load env vars locally
+require('dotenv').config(); 
 
 const app = express();
-const router = express.Router(); // Create a router instance
+const router = express.Router(); 
 
 // Use environment variable for allowed origins, or allow all for dev
 const allowedOrigins = [
@@ -62,7 +61,6 @@ BigInt.prototype.toJSON = function () {
     return this.toString();
 };
 
-// --- ROUTES MOVED TO ROUTER ---
 
 // GET /api/
 router.get('/', (req, res) => {
@@ -141,8 +139,7 @@ router.post('/logout', (req, res) => {
     });
 });
 
-// --- MOUNT ROUTER ---
-// This ensures all the routes above are prefixed with /api
+//mount router at /api
 app.use('/api', router);
 
 // Export the app for Vercel, listen only if running locally
