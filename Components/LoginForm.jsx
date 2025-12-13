@@ -1,5 +1,6 @@
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, Button, TouchableOpacity, Alert, Platform, ActivityIndicator } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage'; // IMPORT ADDED
 import styles from "../Styles";
 
 const LoginForm = ({ navigation }) => {
@@ -51,6 +52,17 @@ const LoginForm = ({ navigation }) => {
       console.log("Login response:", data);
 
       if (response.ok) {
+        // --- CRITICAL FIX: Save User to Local Storage ---
+        // This ensures the Tickets Page knows who you are
+        if (data.user) {
+            try {
+                await AsyncStorage.setItem('userSession', JSON.stringify(data.user));
+                console.log("Session saved locally");
+            } catch (storageError) {
+                console.error("Failed to save session locally", storageError);
+            }
+        }
+
         // Check User Type from Server Response to Navigate
         const userType = data.user?.userType;
         

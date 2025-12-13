@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   SafeAreaView,
-  Platform,
-  Image
+  Platform
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // IMPORTED
 import Foundation from 'react-native-vector-icons/Foundation';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
@@ -35,10 +35,11 @@ const TicketsPage = ({ navigation }) => {
         return `${baseUrl}/api/${endpoint}`;
     };
 
+    // Fetch Data (Routes + User Session)
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            // 1. Fetch Routes
+            // 1. Fetch Routes from Server
             const routeRes = await fetch(getApiUrl('routes'));
             const routeData = await routeRes.json();
             
@@ -46,20 +47,23 @@ const TicketsPage = ({ navigation }) => {
                 setRoutes(routeData);
             } else {
                 console.error("Routes fetch failed:", routeData);
-                // Optional: Set fallback data for testing if API fails
-                // setRoutes([{route_id: 1, route_name: 'Test Route', start_point: 'A', end_point: 'B', estimated_duration: '30 mins'}]);
             }
 
-            // 2. Fetch User Session
-            const userRes = await fetch(getApiUrl('get_user'), { credentials: 'include' });
-            if (userRes.ok) {
-                const userData = await userRes.json();
-                setCommuterId(userData.commuterId || userData.user?.id);
+            // 2. GET USER FROM LOCAL STORAGE (Fixes the "Nothing Happens" bug)
+            const session = await AsyncStorage.getItem('userSession');
+            if (session) {
+                const user = JSON.parse(session);
+                // Handle 'id' or 'user_id' depending on how your DB returns it
+                const userId = user.id || user.user_id; 
+                console.log("Loaded User ID:", userId);
+                setCommuterId(userId);
+            } else {
+                console.log("No user session found locally.");
             }
 
         } catch (error) {
-            console.error("Network Error:", error);
-            // Alert.alert("Connection Error", "Could not connect to server.");
+            console.error("Data loading error:", error);
+            // Optional: Alert.alert("Connection Error", "Could not connect to server.");
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -71,11 +75,13 @@ const TicketsPage = ({ navigation }) => {
     }, [fetchData]);
 
     const handleBookTicket = async () => {
+        // 1. Validate Route Selection
         if (!selectedRoute) {
             Alert.alert('Selection Required', 'Please select a route to book.');
             return;
         }
         
+        // 2. Validate User Login
         if (!commuterId) {
              Alert.alert('Login Required', 'You must be logged in to book a ticket.', [
                  { text: 'Login', onPress: () => navigation.navigate('Login') },
@@ -101,7 +107,6 @@ const TicketsPage = ({ navigation }) => {
             const response = await fetch(getApiUrl('book-ticket'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify(payload),
             });
 
@@ -115,6 +120,7 @@ const TicketsPage = ({ navigation }) => {
                 Alert.alert('Booking Failed', data.error || 'Unknown error');
             }
         } catch (error) {
+            console.error("Booking Error:", error);
             Alert.alert('Error', 'Could not connect to server.');
         } finally {
             setBookingLoading(false);
@@ -172,7 +178,6 @@ const TicketsPage = ({ navigation }) => {
                     <Text style={styles.headerTitle}>Select Route</Text>
                     <Text style={styles.headerSubtitle}>Where are you going today?</Text>
                 </View>
-                {/* Optional: Add user avatar here if fetched */}
             </View>
 
             {/* List */}
@@ -381,6 +386,7 @@ const styles = StyleSheet.create({
         shadowRadius: 10,
         elevation: 20,
         marginBottom: 10,
+        zIndex: 100, // Keeps button clickable
     },
     selectionInfo: {
         flex: 1,
