@@ -37,33 +37,3 @@ This system is built on a high-level design consisting of several key components
 * **Booking & Ride Management:** Manages all booking requests, confirmations, and cancellations.
 * **Backend API Services:** Acts as the central communication hub between the mobile app and the database.
 * **Database:** Stores all user data, route information, and booking details.
-
-## 🛠️ Getting Started
-
-Follow these instructions to get a copy of the project up and running on your local machine for development and testing.
-
-### Prerequisites
-
-* [React Native Development Environment](https://reactnative.dev/docs/environment-setup) (Node.js, Watchman, etc.)
-* Git
-* An Android Emulator or iOS Simulator
-
-### Installation
-
-1.  **Clone the repository:**
-    ```sh
-    git clone [https://github.com/K6EDWIN/Quickmatatu.git]
-    cd Qyuickmatatu
-    ```
-2.  **Install the required packages:**
-    ```sh
-    npm install
-    ```
-
-## 🚀 Usage
-
-To run the app, execute the following commands from the root directory.
-
-**For Android:**
-```sh
-npm run android
