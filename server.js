@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const { createClient } = require('@libsql/client/http');
 const cors = require('cors');
+const bcrypt = require('bcrypt'); // <--- 1. Import bcrypt
 require('dotenv').config();
 
 const app = express();
@@ -53,7 +54,7 @@ async function ensureTablesExist() {
         )
     `);
 
-    // Ensure routes table exists (you likely already have this based on your prompt)
+    // Ensure routes table exists
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS routes (
             route_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +89,6 @@ router.get('/', (req, res) => res.send('QuickMatatu API is running'));
 // --- AUTH ROUTES ---
 
 router.post('/register', async (req, res) => {
-    // ... (Your existing register logic) ...
     console.log("Register Request:", req.body);
     const { userType, username, email, password, license, nationalId } = req.body;
     
@@ -106,15 +106,22 @@ router.post('/register', async (req, res) => {
              return res.status(409).json({ error: 'Email already registered' });
         }
 
+        // --- 2. HASH THE PASSWORD ---
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        // -----------------------------
+
         const query = `
             INSERT INTO users (userType, username, email, password, license_number, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
+        
+        // Use 'hashedPassword' instead of plain 'password'
         const values = [
             userType, 
             username, 
             email, 
-            password,
+            hashedPassword, 
             userType === 'driver' ? license : null,
             userType === 'driver' ? nationalId : null,
         ];
@@ -129,7 +136,6 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    // ... (Your existing login logic) ...
     console.log("Login Request:", req.body);
     const { email, password } = req.body; 
     
@@ -145,9 +151,14 @@ router.post('/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-            if (password !== user.password) {
+
+            // --- 3. COMPARE HASHED PASSWORD ---
+            const match = await bcrypt.compare(password, user.password);
+            
+            if (!match) {
                 return res.status(401).json({ error: 'Invalid credentials.' });
             }
+            // ----------------------------------
             
             req.session.user = { 
                 id: user.user_id.toString(), 
