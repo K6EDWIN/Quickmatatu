@@ -102,6 +102,24 @@ router.get('/', (req, res) => res.send('QuickMatatu API is running'));
 
 // --- 2. AUTHENTICATION ROUTES ---
 
+// *** NEW: Get User Profile Details ***
+router.get('/users/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await turso.execute({
+            sql: "SELECT user_id, username, email, userType, license_number, id_number FROM users WHERE user_id = ?",
+            args: [id]
+        });
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: "User not found" });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post('/register', async (req, res) => {
     console.log("Register Request:", req.body);
     const { userType, username, email, password, license, nationalId } = req.body;
