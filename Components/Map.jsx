@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Animated, Image } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
+import { Dimensions, StyleSheet, View, Text, ActivityIndicator, TouchableOpacity, Animated, Image, Platform } from 'react-native';
+import Mapbox from '@rnmapbox/maps'; 
 import * as Location from 'expo-location';
 
 const { width, height } = Dimensions.get('window');
@@ -10,7 +10,12 @@ const requestLocationPermission = async () => {
   try {
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      alert('Permission to access location was denied');
+      // On Web, this alert might appear if the user clicked "Block"
+      if (Platform.OS === 'web') {
+        alert('Location denied. Click the lock icon in your URL bar to Allow Location.');
+      } else {
+        alert('Permission to access location was denied');
+      }
       return null;
     }
     return await Location.getCurrentPositionAsync({
@@ -22,29 +27,28 @@ const requestLocationPermission = async () => {
   }
 };
 
-Mapbox.setAccessToken('pk.eyJ1IjoibXVuZ2FpIiwiYSI6ImNtMnRreWd2djAzcHAybHNidms4a251bXYifQ.LY23Gbdw_yBwvH8hD2eRmQ');
+if (Platform.OS !== 'web') {
+  Mapbox.setAccessToken('pk.eyJ1IjoibXVuZ2FpIiwiYSI6ImNtMnRreWd2djAzcHAybHNidms4a251bXYifQ.LY23Gbdw_yBwvH8hD2eRmQ');
+}
 
 const Map = () => {
   const [userLocation, setUserLocation] = useState(null);
-  const [activeMatatus, setActiveMatatus] = useState([]); // NEW: State for live drivers
+  const [activeMatatus, setActiveMatatus] = useState([]); 
   const [busStops, setBusStops] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Hover & Popup States
   const [hoveredStop, setHoveredStop] = useState(null);
   const [userPopupVisible, setUserPopupVisible] = useState(false);
   const hoverOpacity = useRef(new Animated.Value(0)).current;
   const userPopupOpacity = useRef(new Animated.Value(0)).current;
 
-  // Helper to get API URL
   const getApiUrl = () => {
     let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
     return url.replace(/\/$/, '');
   };
 
   useEffect(() => {
-    // A. Fetch User Location
     const fetchLocation = async () => {
       const location = await requestLocationPermission();
       if (location) {
@@ -56,7 +60,6 @@ const Map = () => {
       }
     };
 
-    // B. Fetch Static Bus Stops/Routes
     const fetchRoutes = async () => {
       try {
         const response = await fetch(`${getApiUrl()}/api/routes`);
@@ -74,12 +77,10 @@ const Map = () => {
       }
     };
 
-    // C. Fetch Live Drivers (NEW)
     const fetchLiveMatatus = async () => {
       try {
         const response = await fetch(`${getApiUrl()}/api/active-matatus`);
         const data = await response.json();
-        // data structure: [{driver_id, longitude, latitude, ...}, ...]
         setActiveMatatus(data); 
       } catch (error) {
         console.error("Error fetching live matatus", error);
@@ -88,11 +89,9 @@ const Map = () => {
 
     fetchLocation();
     fetchRoutes();
-    fetchLiveMatatus(); // Initial fetch
+    fetchLiveMatatus(); 
 
-    // Poll for live drivers every 10 seconds
     const interval = setInterval(fetchLiveMatatus, 10000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -111,6 +110,27 @@ const Map = () => {
     Animated.timing(userPopupOpacity, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   };
 
+  // --- WEB FALLBACK RENDER ---
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.page, { backgroundColor: '#e0e0e0' }]}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Web Map Placeholder</Text>
+        <Text>Mapbox Native does not support Web.</Text>
+        {userLocation ? (
+             <Text style={{ marginTop: 10, color: 'green' }}>
+                Location Found: {userLocation[1].toFixed(4)}, {userLocation[0].toFixed(4)}
+             </Text>
+        ) : (
+             <Text style={{ marginTop: 10, color: 'red' }}>
+                {errorMessage || "Waiting for location permission..."}
+             </Text>
+        )}
+        <Text style={{ marginTop: 20, fontSize: 12, color: 'gray' }}>(Test on Android Emulator to see the real Map)</Text>
+      </View>
+    );
+  }
+
+  // --- NATIVE RENDER (Original Code) ---
   return (
     <View style={styles.page}>
       {isLoading ? (
@@ -123,14 +143,14 @@ const Map = () => {
           <Mapbox.MapView style={styles.map} styleURL="mapbox://styles/mapbox/streets-v11">
             <Mapbox.Camera zoomLevel={14} centerCoordinate={userLocation} animationMode="flyTo" animationDuration={2000} />
             
-            {/* 1. User Marker */}
+            {/* User Marker */}
             <Mapbox.MarkerView coordinate={userLocation}>
               <TouchableOpacity onPress={handleUserMarkerPress}>
                 <Image source={require('../assets/mappin.png')} style={styles.userIcon} />
               </TouchableOpacity>
             </Mapbox.MarkerView>
 
-            {/* 2. Static Bus Stops */}
+            {/* Static Bus Stops */}
             {busStops.map((stop) => (
               <Mapbox.MarkerView key={`stop-${stop.id}`} coordinate={stop.coordinate}>
                 <TouchableOpacity
@@ -142,7 +162,7 @@ const Map = () => {
               </Mapbox.MarkerView>
             ))}
 
-            {/* 3. Live Matatu Drivers (NEW) */}
+            {/* Live Matatu Drivers */}
             {activeMatatus.map((matatu) => (
               <Mapbox.MarkerView 
                 key={`driver-${matatu.driver_id}`} 
