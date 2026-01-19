@@ -66,7 +66,7 @@ export default function AccountScreen({ route, navigation }) {
         // 2. Call Logout API
         await fetch(`${getApiUrl()}/logout`, { method: 'POST', credentials: 'include' });
 
-        // 3. Navigate to Login
+        // 3. Navigate to Login (resetting stack so you can't go back)
         navigation.reset({
             index: 0,
             routes: [{ name: 'Login' }],
@@ -80,7 +80,7 @@ export default function AccountScreen({ route, navigation }) {
   const handleManageAccount = () => {
     if (!profileData) return;
     
-    // Simple way to show details since we don't have a dedicated Edit Profile page yet
+    // Display user details
     const info = `Username: ${profileData.username}\nEmail: ${profileData.email}\nUser Type: ${profileData.userType}\n${profileData.license_number ? 'License: ' + profileData.license_number : ''}`;
     
     if (Platform.OS === 'web') {
@@ -100,50 +100,6 @@ export default function AccountScreen({ route, navigation }) {
       <MaterialIcons name="chevron-right" size={24} color="#ccc" style={{ marginLeft: 'auto' }} />
     </TouchableOpacity>
   );
-
-  // --- Navigation Logic for Bottom Bar ---
-  const bottomNavigation = (selected) => {
-    // If driver, you might want to redirect to DriverHomepage
-    if (selected === 'home') {
-       navigation.navigate(userType === 'driver' ? 'DriverHomepage' : 'UserHomepage');
-    } else if (selected === 'history') {
-       navigation.navigate(userType === 'driver' ? 'HistoryScreenDriver' : 'HistoryScreenUser');
-    } else if (selected === 'account-circle') {
-       // We are already here
-    } else if (selected === 'confirmation-number') {
-       navigation.navigate('TicketsPage');
-    }
-  };
-
-  const BottomNavigation = () => {
-    const bottomNavItems = [
-      { icon: 'home', label: 'Home' },
-      { icon: 'history', label: 'History' },
-      { icon: 'confirmation-number', label: 'Tickets' },
-      { icon: 'account-circle', label: 'Account' },
-    ];
-
-    return (
-      <View style={styles.bottomNavigation}>
-        {bottomNavItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.iconContainer}
-            onPress={() => bottomNavigation(item.icon)}
-          >
-            <MaterialIcons 
-                name={item.icon} 
-                size={hp('4%')} 
-                color={item.label === 'Account' ? 'blue' : 'black'} 
-            />
-            <Text style={[styles.iconLabel, item.label === 'Account' && { color: 'blue' }]}>
-                {item.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
-  };
 
   if (loading) {
     return (
@@ -196,9 +152,6 @@ export default function AccountScreen({ route, navigation }) {
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Only show bottom nav if it's a commuter, usually drivers have different nav */}
-      {userType !== 'driver' && <BottomNavigation />}
     </View>
   );
 }
@@ -211,7 +164,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingBottom: 100, // Space for bottom nav
+    paddingBottom: 20, 
   },
   header: {
     alignItems: 'center',
@@ -235,8 +188,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 10,
-    elevation: 2, // Shadow for Android
-    shadowColor: '#000', // Shadow for iOS
+    elevation: 2, 
+    shadowColor: '#000', 
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
@@ -273,25 +226,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: hp('2.2%'),
     fontWeight: 'bold',
-  },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    position: 'absolute',
-    bottom: 0,
-  },
-  iconContainer: {
-    alignItems: 'center',
-  },
-  iconLabel: {
-    fontSize: hp('1.8%'),
-    color: '#333',
-    marginTop: 4,
   },
   loadingContainer: {
     flex: 1,
