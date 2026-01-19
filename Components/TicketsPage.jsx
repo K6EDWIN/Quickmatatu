@@ -5,8 +5,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
-import Foundation from 'react-native-vector-icons/Foundation';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const TicketsPage = ({ navigation }) => {
     const [routes, setRoutes] = useState([]);
@@ -66,7 +64,7 @@ const TicketsPage = ({ navigation }) => {
 
             if (response.ok) {
                 Alert.alert("Request Sent!", "Your request has been sent to nearby drivers.", [
-                    { text: "Track Status", onPress: () => navigation.navigate("HistoryScreenUser") }
+                    { text: "Track Status", onPress: () => navigation.navigate("History") }
                 ]);
             } else {
                 Alert.alert("Error", result.error || "Could not book ticket.");
@@ -109,7 +107,7 @@ const TicketsPage = ({ navigation }) => {
                 renderItem={renderItem} 
                 keyExtractor={item => item.route_id.toString()}
                 refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
-                contentContainerStyle={{ paddingBottom: 150 }}
+                contentContainerStyle={{ paddingBottom: 100 }}
             />
             
             <View style={styles.footer}>
@@ -119,26 +117,6 @@ const TicketsPage = ({ navigation }) => {
                     ) : (
                         <Text style={styles.btnText}>Request Matatu</Text>
                     )}
-                </TouchableOpacity>
-            </View>
-
-            {/* Navigation Bar */}
-            <View style={styles.navBar}>
-                 <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserHomepage")}>
-                    <Foundation name='home' size={24} color="#aaa" />
-                    <Text style={styles.navText}>Home</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("HistoryScreenUser")}>
-                    <MaterialCommunityIcons name='history' size={24} color="#aaa" />
-                    <Text style={styles.navText}>History</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem}>
-                    <Ionicons name='ticket' size={24} color="black" />
-                    <Text style={[styles.navText, {color:'black', fontWeight: 'bold'}]}>Tickets</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("UserAccount")}>
-                    <AntDesign name='user' size={24} color="#aaa" />
-                    <Text style={styles.navText}>Profile</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>
@@ -157,15 +135,9 @@ const styles = StyleSheet.create({
     routeName: { fontWeight: 'bold', fontSize: 18, color: '#333' },
     routeDetails: { color: '#666', marginTop: 4 },
     routeTime: { color: '#888', fontSize: 12, marginTop: 4 },
-    footer: { position: 'absolute', bottom: 70, left: 0, right: 0, padding: 20 },
+    footer: { position: 'absolute', bottom: 20, left: 0, right: 0, padding: 20 },
     bookButton: { backgroundColor: 'black', padding: 18, borderRadius: 15, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, elevation: 5 },
-    btnText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-    navBar: {
-        flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, backgroundColor: '#fff',
-        position: 'absolute', bottom: 0, width: '100%', borderTopWidth: 1, borderColor: '#eee'
-    },
-    navItem: { alignItems: 'center' },
-    navText: { fontSize: 10, color: '#aaa', marginTop: 4 }
+    btnText: { color: 'white', fontWeight: 'bold', fontSize: 18 }
 });
 
 export default TicketsPage;
