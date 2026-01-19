@@ -2,7 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const { createClient } = require('@libsql/client/http');
 const cors = require('cors');
-const bcrypt = require('bcrypt'); // <--- 1. Import bcrypt
+const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const app = express();
@@ -33,6 +33,7 @@ app.use(session({
     cookie: { secure: process.env.NODE_ENV === 'production', sameSite: 'lax' },
 }));
 
+// Initialize Database Client
 const turso = createClient({
     url: process.env.TURSO_DATABASE_URL,
     authToken: process.env.TURSO_AUTH_TOKEN,
@@ -40,8 +41,9 @@ const turso = createClient({
 
 BigInt.prototype.toJSON = function () { return this.toString(); };
 
-// Ensure Tables Exist
+// --- 1. DATABASE SETUP ---
 async function ensureTablesExist() {
+    // Users Table
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +56,7 @@ async function ensureTablesExist() {
         )
     `);
 
-    // Ensure routes table exists
+    // Routes Table
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS routes (
             route_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,12 +65,13 @@ async function ensureTablesExist() {
             end_point TEXT,
             intermediary_stops TEXT,
             estimated_duration TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             longitude DECIMAL(10, 8),
-            latitude DECIMAL(10, 8)
+            latitude DECIMAL(10, 8),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `);
 
+    // Tickets Table (Enhanced for Status Tracking)
     await turso.execute(`
         CREATE TABLE IF NOT EXISTS tickets (
             ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +79,18 @@ async function ensureTablesExist() {
             route_id INTEGER,
             pickup_point TEXT,
             booking_time TEXT,
-            status TEXT DEFAULT 'active'
+            status TEXT DEFAULT 'pending' 
+        )
+    `);
+
+    // Active Drivers Table (For Live Tracking)
+    await turso.execute(`
+        CREATE TABLE IF NOT EXISTS active_drivers (
+            driver_id INTEGER PRIMARY KEY,
+            latitude DECIMAL(10, 8),
+            longitude DECIMAL(10, 8),
+            is_active BOOLEAN DEFAULT 1,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `);
 }
@@ -86,14 +100,14 @@ ensureTablesExist().catch(console.error);
 
 router.get('/', (req, res) => res.send('QuickMatatu API is running'));
 
-// --- AUTH ROUTES ---
+// --- 2. AUTHENTICATION ROUTES ---
 
 router.post('/register', async (req, res) => {
     console.log("Register Request:", req.body);
     const { userType, username, email, password, license, nationalId } = req.body;
     
     if (!username || !password || !userType || !email) {
-        return res.status(400).json({ error: 'Missing required fields (Email is required)' });
+        return res.status(400).json({ error: 'Missing required fields' });
     }
 
     try {
@@ -106,17 +120,13 @@ router.post('/register', async (req, res) => {
              return res.status(409).json({ error: 'Email already registered' });
         }
 
-        // --- 2. HASH THE PASSWORD ---
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        // -----------------------------
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         const query = `
             INSERT INTO users (userType, username, email, password, license_number, id_number)
             VALUES (?, ?, ?, ?, ?, ?)
         `;
         
-        // Use 'hashedPassword' instead of plain 'password'
         const values = [
             userType, 
             username, 
@@ -136,7 +146,6 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    console.log("Login Request:", req.body);
     const { email, password } = req.body; 
     
     if (!email || !password) {
@@ -151,14 +160,11 @@ router.post('/login', async (req, res) => {
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
-
-            // --- 3. COMPARE HASHED PASSWORD ---
             const match = await bcrypt.compare(password, user.password);
             
             if (!match) {
                 return res.status(401).json({ error: 'Invalid credentials.' });
             }
-            // ----------------------------------
             
             req.session.user = { 
                 id: user.user_id.toString(), 
@@ -181,7 +187,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/get_user', (req, res) => {
     if (req.session.user) {
-        res.json({ user: req.session.user, commuterId: req.session.user.id });
+        res.json({ user: req.session.user });
     } else {
         res.status(401).json({ error: 'Not logged in' });
     }
@@ -194,8 +200,52 @@ router.post('/logout', (req, res) => {
     });
 });
 
-// --- ROUTE & TICKET ROUTES ---
+// --- 3. LIVE TRACKING ROUTES ---
 
+// Driver: Update Location (Go Online)
+router.post('/update-location', async (req, res) => {
+    const { driver_id, latitude, longitude } = req.body;
+
+    if (!driver_id || !latitude || !longitude) {
+        return res.status(400).json({ error: "Missing location data" });
+    }
+
+    try {
+        // Upsert: Insert if new, Update if exists
+        await turso.execute({
+            sql: `INSERT INTO active_drivers (driver_id, latitude, longitude, is_active, last_updated) 
+                  VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+                  ON CONFLICT(driver_id) DO UPDATE SET 
+                  latitude=excluded.latitude, longitude=excluded.longitude, last_updated=CURRENT_TIMESTAMP`,
+            args: [driver_id, latitude, longitude]
+        });
+        res.json({ success: true, message: "Location updated" });
+    } catch (err) {
+        console.error("Location Update Error:", err);
+        res.status(500).json({ error: "Failed to update location" });
+    }
+});
+
+// User: Get Active Matatus (Nearby Drivers)
+router.get('/active-matatus', async (req, res) => {
+    try {
+        // Only fetch drivers updated in the last 5 minutes
+        const result = await turso.execute(`
+            SELECT ad.*, u.username, u.license_number 
+            FROM active_drivers ad
+            JOIN users u ON ad.driver_id = u.user_id
+            WHERE ad.is_active = 1 AND ad.last_updated > datetime('now', '-5 minutes')
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Fetch Active Matatus Error:", err);
+        res.status(500).json({ error: "Failed to fetch matatus" });
+    }
+});
+
+// --- 4. BOOKING & ROUTE ROUTES ---
+
+// Get All Routes
 router.get('/routes', async (req, res) => {
     try {
         const result = await turso.execute("SELECT * FROM routes");
@@ -206,6 +256,7 @@ router.get('/routes', async (req, res) => {
     }
 });
 
+// User: Book a Ticket (Create Request)
 router.post('/book-ticket', async (req, res) => {
     const { commuter_id, route_id, pickup_point, estimated_pickup_time } = req.body;
 
@@ -215,8 +266,8 @@ router.post('/book-ticket', async (req, res) => {
 
     try {
         const result = await turso.execute({
-            sql: `INSERT INTO tickets (commuter_id, route_id, pickup_point, booking_time) 
-                  VALUES (?, ?, ?, ?)`,
+            sql: `INSERT INTO tickets (commuter_id, route_id, pickup_point, booking_time, status) 
+                  VALUES (?, ?, ?, ?, 'pending')`,
             args: [commuter_id, route_id, pickup_point, estimated_pickup_time]
         });
 
@@ -228,6 +279,61 @@ router.post('/book-ticket', async (req, res) => {
     }
 });
 
+// User: Get Booking History
+router.get('/user/bookings/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const result = await turso.execute({
+            sql: `SELECT t.*, r.route_name, r.estimated_duration 
+                  FROM tickets t 
+                  JOIN routes r ON t.route_id = r.route_id 
+                  WHERE t.commuter_id = ? 
+                  ORDER BY t.booking_time DESC`,
+            args: [userId]
+        });
+        res.json(result.rows);
+    } catch (err) {
+        console.error("History Error:", err);
+        res.status(500).json({ error: "Failed to fetch history" });
+    }
+});
+
+// Driver: Get Pending Booking Requests
+router.get('/driver/bookings', async (req, res) => {
+    try {
+        const result = await turso.execute(`
+            SELECT t.*, u.username as commuter_name 
+            FROM tickets t
+            JOIN users u ON t.commuter_id = u.user_id
+            WHERE t.status = 'pending'
+            ORDER BY t.booking_time DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Driver Bookings Error:", err);
+        res.status(500).json({ error: "Failed to fetch bookings" });
+    }
+});
+
+// Universal: Update Booking Status (Cancel, Accept, Reject)
+router.post('/update-booking-status', async (req, res) => {
+    const { ticket_id, status } = req.body; // status: 'cancelled', 'accepted', 'rejected', 'completed'
+
+    if (!ticket_id || !status) {
+        return res.status(400).json({ error: "Missing ticket ID or status" });
+    }
+
+    try {
+        await turso.execute({
+            sql: "UPDATE tickets SET status = ? WHERE ticket_id = ?",
+            args: [status, ticket_id]
+        });
+        res.json({ message: `Booking ${status}` });
+    } catch (err) {
+        console.error("Update Status Error:", err);
+        res.status(500).json({ error: "Update failed" });
+    }
+});
 
 app.use('/api', router);
 
