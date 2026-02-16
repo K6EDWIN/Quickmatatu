@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-const Map = () => {
+const Map = ({ searchQuery }) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Map Unavailable on Web</Text>
