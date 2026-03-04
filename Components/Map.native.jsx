@@ -22,9 +22,9 @@ const requestLocationPermission = async () => {
   }
 };
 
-Mapbox.setAccessToken('pk.eyJ1IjoibXVuZ2FpIiwiYSI6ImNtMnRreWd2djAzcHAybHNidms4a251bXYifQ.LY23Gbdw_yBwvH8hD2eRmQ');
+Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN);
 
-const Map = () => {
+const Map = ({ searchQuery }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [activeMatatus, setActiveMatatus] = useState([]); 
   const [busStops, setBusStops] = useState([]);
@@ -120,7 +120,11 @@ const Map = () => {
               </TouchableOpacity>
             </Mapbox.MarkerView>
 
-            {busStops.map((stop) => (
+            {busStops.filter(stop =>
+              !searchQuery ||
+              (stop.name && stop.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+              (stop.destination && stop.destination.toLowerCase().includes(searchQuery.toLowerCase()))
+            ).map((stop) => (
               <Mapbox.MarkerView key={`stop-${stop.id}`} coordinate={stop.coordinate}>
                 <TouchableOpacity
                   style={styles.busStopMarker}
