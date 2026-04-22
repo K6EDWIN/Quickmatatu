@@ -12,26 +12,26 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_KEY"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.otogano.QuickMatatu"
+      "package": "com.otogano.QuickMatatu",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_KEY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsDownloadToken": "sk.eyJ1IjoibXVuZ2FpIiwiYSI6ImNtMnl6NjUzZDA1ZHoyanM4cGV2MHYzemgifQ.J-HRBEQNT5dGaRahbILAkAw"
-        }
-      ]
-    ],
     "newArchEnabled": true,
     "extra": {
       "eas": {
