@@ -1,67 +1,24 @@
-// Top-level build file
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withInputStream { stream ->
-        localProperties.load(stream)
-    }
-}
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext {
-        buildToolsVersion = "34.0.0"
-        minSdkVersion = 23
-        compileSdkVersion = 34
-        targetSdkVersion = 34
-        ndkVersion = "26.1.10909125"
-
-        // --- CRITICAL VERSION FIX ---
-        // Your logs show you are using Kotlin 1.9.22.
-        // We set Compose Compiler to 1.5.8 which is the strict match for 1.9.22.
-        kotlinVersion = "1.9.22"
-        composeCompilerVersion = "1.5.8"
-        // ----------------------------
-    }
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        // Using stable AGP 8.2.1
-        classpath("com.android.tools.build:gradle:8.2.1")
-        classpath('com.facebook.react:react-native-gradle-plugin')
-        // Explicitly applying the kotlinVersion variable here
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
-    }
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
 }
 
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
-
-allprojects {
-    repositories {
-        maven {
-            url(new File(['node', '--print', "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim(), '../android'))
-        }
-        maven {
-            url(new File(['node', '--print', "require.resolve('jsc-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), '../dist'))
-        }
-
-        google()
-        mavenCentral()
-        maven { url 'https://www.jitpack.io' }
-    }
-}
-
-// Mapbox configuration
-allprojects {
-    repositories {
-        maven {
-            url 'https://api.mapbox.com/downloads/v2/releases/maven'
-            authentication { basic(BasicAuthentication) }
-            credentials {
-                username = 'mapbox'
-                password = localProperties.getProperty("MAPBOX_DOWNLOADS_TOKEN")
-            }
-        }
-    }
-}

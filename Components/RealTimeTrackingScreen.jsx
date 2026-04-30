@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity } from 'react-native';
-import Map from './Map';
+import Map from '../PlatformMap';
 import EvilIcons from 'react-native-vector-icons/EvilIcons';
 
 const RealTimeTrackingScreen = () => {
