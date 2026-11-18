@@ -13,13 +13,12 @@ let driverLocationActive = false;
 const authVersions = new Map([['1', 0], ['2', 0], ['3', 0]]);
 
 const db = {
-  async execute(statement) {
-    const sql = typeof statement === 'string' ? statement : statement.sql;
-    const args = typeof statement === 'string' ? [] : statement.args;
-    if (sql.includes('FROM users WHERE user_id = ?')) {
+  async query(sql, args = []) {
+    sql = sql.replace(/\s+/g, ' ').trim();
+    if (sql.includes('FROM users WHERE user_id = $1')) {
       const id = String(args[0]);
       return { rows: ['1', '2', '3'].includes(id)
-        ? [{ user_id: id, userType: id === '2' ? 'driver' : 'commuter', username: 'test', email: 'test@example.com', auth_version: authVersions.get(id) }]
+        ? [{ user_id: id, user_type: id === '2' ? 'driver' : 'commuter', username: 'test', email: 'test@example.com', auth_version: authVersions.get(id), email_verified: 1 }]
         : [] };
     }
     if (sql.includes('SELECT ticket_id, commuter_id, driver_id, status FROM tickets')) {
@@ -30,35 +29,35 @@ const db = {
     }
     if (sql.includes('INSERT INTO tickets')) {
       insertedBooking = args;
-      return { lastInsertRowid: 42n };
+      return { rows: [{ ticket_id: '42' }], rowCount: 1 };
     }
     if (sql.includes('INSERT INTO active_drivers')) {
       updatedDriverLocation = args;
       driverLocationActive = true;
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
-    if (sql.startsWith('UPDATE active_drivers SET is_active = 0')) {
+    if (sql.startsWith('UPDATE active_drivers SET is_active = FALSE')) {
       driverLocationActive = false;
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
     if (sql.includes('UPDATE users SET auth_version = auth_version + 1')) {
       authVersions.set(String(args[0]), authVersions.get(String(args[0])) + 1);
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
     if (sql.startsWith("UPDATE tickets SET status = 'cancelled'")) {
-      if (ticket.status !== 'pending' || ticket.commuter_id !== String(args[1])) return { rowsAffected: 0 };
+      if (ticket.status !== 'pending' || ticket.commuter_id !== String(args[1])) return { rowCount: 0 };
       ticket.status = 'cancelled';
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
-    if (sql.startsWith('UPDATE tickets SET status = ?')) {
-      if (ticket.status !== 'pending' || ticket.driver_id) return { rowsAffected: 0 };
+    if (sql.startsWith('UPDATE tickets SET status = $1')) {
+      if (ticket.status !== 'pending' || ticket.driver_id) return { rowCount: 0 };
       [ticket.status, ticket.driver_id] = [args[0], String(args[1])];
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
     if (sql.startsWith("UPDATE tickets SET status = 'completed'")) {
-      if (ticket.status !== 'accepted' || ticket.driver_id !== String(args[1])) return { rowsAffected: 0 };
+      if (ticket.status !== 'accepted' || ticket.driver_id !== String(args[1])) return { rowCount: 0 };
       ticket.status = 'completed';
-      return { rowsAffected: 1 };
+      return { rowCount: 1 };
     }
     if (sql.includes('FROM tickets t') && sql.includes("t.status = 'pending'")) return { rows: [] };
     return { rows: [] };
@@ -86,6 +85,21 @@ test('access tokens are signed and expire', () => {
   assert.deepEqual(verifyAccessToken(token, secret, 1_000_001), { id: '17', version: 0 });
   assert.equal(verifyAccessToken(`${token.slice(0, -1)}x`, secret, 1_000_001), null);
   assert.equal(verifyAccessToken(token, secret, 1_000_000 + 8 * 24 * 60 * 60 * 1000), null);
+});
+
+test('database-backed endpoints fail closed without a configured database', async () => {
+  const unavailableServer = createServer(createApp({ db: null, secret }));
+  await new Promise((resolve) => unavailableServer.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${unavailableServer.address().port}/api/auth/google/nonce`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.equal(response.status, 503);
+  } finally {
+    await new Promise((resolve, reject) => unavailableServer.close((error) => error ? reject(error) : resolve()));
+  }
 });
 
 test('private routes require a valid identity and driver role', async () => {

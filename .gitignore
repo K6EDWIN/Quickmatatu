@@ -30,6 +30,8 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -38,3 +40,8 @@ yarn-error.*
 package-lock.json
 .vercel
 .env
+google.json
+google-services.json
+client_secret*.json
+GoogleService-Info.plist
+*service-account*.json

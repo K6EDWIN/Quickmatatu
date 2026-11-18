@@ -6,6 +6,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 // Import your existing components
 import LoginForm from "./Components/LoginForm";
 import RegistrationForm from "./Components/Registration";
+import EmailVerificationScreen from './Components/EmailVerificationScreen';
+import PasswordRecoveryScreen from './Components/PasswordRecoveryScreen';
 import WelcomeScreen from './Components/WelcomeScreen';
 import DriverHomepage from './Components/DriverHomepage';
 import DriverHistoryScreen from './Components/HistoryScreenDriver';
@@ -39,6 +41,16 @@ const App = () => {
           name="Login" 
           component={LoginForm} 
           options={{ headerTitle: "Login" }}
+        />
+        <Stack.Screen
+          name="VerifyEmail"
+          component={EmailVerificationScreen}
+          options={{ headerTitle: 'Verify email' }}
+        />
+        <Stack.Screen
+          name="PasswordRecovery"
+          component={PasswordRecoveryScreen}
+          options={{ headerTitle: 'Password recovery' }}
         />
         <Stack.Screen 
           name="UserHomepage" 

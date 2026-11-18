@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, TouchableOpacity, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
 import styles from '../Styles';
+import { apiRequest } from './api';
 
 const RegistrationForm = ({ navigation }) => {
   const [userType, setUserType] = useState("commuter");
@@ -13,7 +14,6 @@ const RegistrationForm = ({ navigation }) => {
   const [nationalId, setNationalId] = useState("");
   
   const [loading, setLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false); // New state for success view
   const [visibleComponent, setVisibleComponent] = useState('CommuterRegistration');
 
   const notify = (title, message) => {
@@ -139,34 +139,15 @@ const RegistrationForm = ({ navigation }) => {
     };
 
     try {
-      const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001')
-        .replace(/\/api\/register\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
-      const response = await fetch(`${baseUrl}/api/register`, {
+      const data = await apiRequest('/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // SUCCESS: Show spinner screen instead of Alert
-        setIsSuccess(true);
-        
-        // Wait 2 seconds, then navigate to Login
-        setTimeout(() => {
-            setIsSuccess(false);
-            setLoading(false);
-            navigation.navigate("Login");
-        }, 2000);
-      } else {
-        notify('Registration Failed', data.error || data.message);
-        setLoading(false);
-      }
-
+      navigation.navigate('VerifyEmail', { email: data.email || email.trim().toLowerCase() });
     } catch (error) {
       console.error('Registration Error:', error);
-      notify('Connection Error', error.message || 'Unable to connect to the server.');
+      notify('Registration Failed', error.message || 'Unable to create the account.');
+    } finally {
       setLoading(false);
     }
   };
@@ -205,22 +186,6 @@ const RegistrationForm = ({ navigation }) => {
     );
   };
 
-  // 1. SUCCESS VIEW (Replaces Form when successful)
-  if (isSuccess) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="#1b4332" />
-          <Text style={{ marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>
-              Registration Successful!
-          </Text>
-          <Text style={{ marginTop: 10, color: '#666' }}>
-              Redirecting to Login...
-          </Text>
-      </View>
-    );
-  }
-
-  // 2. STANDARD FORM VIEW
   return (
     <ScrollView style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
       <View style={styles.container}>
