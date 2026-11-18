@@ -1,230 +1,165 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, Alert, Image, TouchableOpacity, StyleSheet, Platform, ScrollView } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { ScreenWidth } from "react-native-elements/dist/helpers";
-import { Switch } from "react-native-elements";
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { apiRequest } from './api';
 
-const DriverHistoryScreen = ({navigation}) => {
-  const [tripHistory, setTripHistory] = useState([]);
-  const [activeTab, setActiveTab] = useState("history");
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+const DriverHistoryScreen = () => {
+  const [activeTab, setActiveTab] = useState('requests');
+  const [requests, setRequests] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [updatingTicket, setUpdatingTicket] = useState(null);
 
-  const fetchTripHistory = async (date) => {
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
     try {
-      const driverId = 6;
-      const formattedDate = date.toISOString().slice(0, 10);
-      console.log(`Fetching trips for driver ${driverId} on ${formattedDate}`);
-      
-      if (Array.isArray(response.data) && response.data.length > 0) {
-        setTripHistory(response.data);
-      } else {
-        Alert.alert(`No trip history found for ${formattedDate}.`);
-        setTripHistory([]);
+      const [incoming, past] = await Promise.all([
+        apiRequest('/driver/bookings'),
+        apiRequest('/driver/bookings/history'),
+      ]);
+      if (!Array.isArray(incoming) || !Array.isArray(past)) {
+        throw new Error('Booking information is unavailable.');
       }
-    } catch (error) {
-      console.error("Error fetching trip history:", error);
-      Alert.alert("Unable to fetch trip history. Please try again.");
-      setTripHistory([]);
+      setRequests(incoming);
+      setHistory(past);
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to load driver bookings.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
+
+  const updateStatus = async (ticketId, status) => {
+    setUpdatingTicket(ticketId);
+    try {
+      await apiRequest('/update-booking-status', {
+        method: 'POST',
+        body: JSON.stringify({ ticket_id: ticketId, status }),
+      });
+      await fetchBookings();
+    } catch (requestError) {
+      const message = requestError.message || 'Unable to update this request.';
+      if (Platform.OS === 'web') window.alert(message);
+      else Alert.alert('Request not updated', message);
+    } finally {
+      setUpdatingTicket(null);
     }
   };
 
-  useEffect(() => {
-    fetchTripHistory(selectedDate);
-  }, [selectedDate]);
-  const renderBottomNavButton = (title, iconSrc, activeTab, setActiveTab) => (
-    <TouchableOpacity
-      style={[styles.bottomNav, activeTab === title.toLowerCase() && styles.active]}
-      onPress={() => {setActiveTab(title.toLowerCase())
-          console.log(title);
-          SwitchPage(title);   
-      }}
-    >
-      <Image source={iconSrc} style={styles.navIcon} />
-      <Text>{title}</Text>
-    </TouchableOpacity>
-  );
-  
-  function SwitchPage(page){
-      if (page=="Home"){
-          navigation.navigate("DriverHomepage");
-       }else if (page=="History"){
-          navigation.navigate("HistoryScreen");
-       }else if(page=="Account"){
-          navigation.navigate("UserAccount",{name: 'Driver'});
-       }else
-       {  navigation.navigate("HistoryScreen");}
-  }
-  return (
-    <View style={styles.historyContainer}>
-      <View style={styles.historyHeader}>
-        <Text style={styles.headerText}>Your History</Text>
-
-        {/* Date Container */}
-        <View style={styles.dateContainer}>
-          <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-            <Text style={styles.dateText}>{selectedDate.toISOString().slice(0, 10)}</Text>
+  const data = activeTab === 'requests' ? requests : history;
+  const renderItem = ({ item }) => (
+    <View style={styles.card}>
+      <View style={styles.row}>
+        <Text style={styles.routeName}>{item.route_name || 'Route unavailable'}</Text>
+        <Text style={[styles.status, item.status === 'accepted' ? styles.accepted : null]}>
+          {item.status}
+        </Text>
+      </View>
+      <Text style={styles.detail}>{item.start_point} to {item.end_point}</Text>
+      <Text style={styles.detail}>Boarding: {item.pickup_point}</Text>
+      <Text style={styles.detail}>Commuter: {item.commuter_name || 'Quickmatatu commuter'}</Text>
+      <Text style={styles.detail}>
+        Requested {item.booking_time ? new Date(item.booking_time).toLocaleString() : 'time unavailable'}
+      </Text>
+      {activeTab === 'requests' && (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.acceptButton]}
+            onPress={() => updateStatus(item.ticket_id, 'accepted')}
+            disabled={updatingTicket !== null}
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionText}>{updatingTicket === item.ticket_id ? 'Updating…' : 'Accept request'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => updateStatus(item.ticket_id, 'rejected')}
+            disabled={updatingTicket !== null}
+            accessibilityRole="button"
+          >
+            <Text style={styles.rejectText}>Decline</Text>
           </TouchableOpacity>
         </View>
+      )}
+      {activeTab === 'history' && item.status === 'accepted' && (
+        <TouchableOpacity
+          style={[styles.actionButton, styles.acceptButton, { marginTop: 12 }]}
+          onPress={() => updateStatus(item.ticket_id, 'completed')}
+          disabled={updatingTicket !== null}
+          accessibilityRole="button"
+        >
+          <Text style={styles.actionText}>
+            {updatingTicket === item.ticket_id ? 'Updating…' : 'Mark ride completed'}
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display={Platform.OS === "ios" ? "inline" : "default"}
-            onChange={(event, date) => {
-              setShowDatePicker(false);
-              if (date) {
-                setSelectedDate(date);
-                fetchTripHistory(date);
-              }
-            }}
-          />
-        )}
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Driver bookings</Text>
+      <View style={styles.tabs}>
+        {['requests', 'history'].map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={[styles.tab, activeTab === tab && styles.activeTab]}
+            onPress={() => setActiveTab(tab)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === tab }}
+          >
+            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+              {tab === 'requests' ? `Requests (${requests.length})` : 'History'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-
-      {/* Scrollable Content */}
-      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.tripList}>
-          {tripHistory.length > 0 ? (
-            tripHistory.map((trip) => (
-              <View style={styles.tripCard} key={trip.id}>
-                <View style={styles.tripInfo}>
-                  <Text style={styles.tripLabel}>Route:</Text>
-                  <Text style={styles.tripRoute}>{trip.route || "Unknown Route"}</Text>
-                  <Image source={require("../assets/locicon.png")} style={styles.locationIcon} />
-                </View>
-                <View style={styles.tripDetails}>
-                  <View style={styles.fare}>
-                    <Image source={require("../assets/money-1.png")} style={styles.currencyIcon} />
-                    <Text style={styles.fareText}>Ksh 1000</Text>
-                  </View>
-                  <Text style={[styles.tripStatus, styles[trip.status]]}>
-                    {trip.status || "Status Unknown"}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.noHistoryText}>No trip history available</Text>
-          )}
+      {loading && data.length === 0 ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#1b4332" />
+          <Text style={styles.message}>Loading bookings…</Text>
         </View>
-      </ScrollView>
-
-      <View style={styles.bottomNavContainer}>
-        {renderBottomNavButton("Home", require("../assets/home-icon.png"), activeTab, setActiveTab,)}
-        {renderBottomNavButton("History", require("../assets/history-icon.png"), activeTab, setActiveTab)}
-        {renderBottomNavButton("Account", require("../assets/user-icon.png"), activeTab, setActiveTab)}
-      </View>
+      ) : (
+        <FlatList
+          data={data}
+          renderItem={renderItem}
+          keyExtractor={(item) => String(item.ticket_id)}
+          contentContainerStyle={data.length ? styles.list : styles.emptyList}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchBookings} />}
+          ListEmptyComponent={<Text style={styles.message}>{error || `No ${activeTab} yet.`}</Text>}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  historyContainer: {
-    flex: 1,
-    padding: 20,
-  },
-  historyHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  headerText: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 30,
-    fontWeight: "bold",
-  },
-  dateContainer: {
-    padding: 10,
-    borderRadius: 20,
-    backgroundColor: "#f0f0f0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  dateText: {
-    fontSize: 16,
-  },
-  scrollContainer: {
-    flex: 1,
-    marginTop: 20,
-  },
-  scrollContent: {
-    paddingBottom: 80,
-  },
-  tripList: {
-    flex: 1,
-  },
-  tripCard: {
-    padding: 15,
-    backgroundColor: "#f0f0f0",
-    marginBottom: 10,
-    borderRadius: 8,
-  },
-  tripInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  tripLabel: {
-    fontWeight: "bold",
-  },
-  tripRoute: {
-    fontSize: 20,
-  },
-  tripDetails: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  fare: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  currencyIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 5,
-  },
-  locationIcon: {
-    width: 20,
-  },
-  fareText: {
-    fontSize: 16,
-  },
-  tripStatus: {
-    fontSize: 14,
-    color: "#888",
-    marginLeft: 45,
-  },
-  noHistoryText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: 20,
-  },
-  bottomNavContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    padding: 20,
-    borderRadius: 32,
-    backgroundColor: "#ddd",
-    width: ScreenWidth * 0.9,
-  },
-  bottomNav: {
-    alignItems: "center",
-  },
-  active: {
-    color: "#000",
-  },
-  navIcon: {
-    width: 24,
-    height: 24,
-    marginBottom: 5,
-  },
+  container: { flex: 1, backgroundColor: '#f7f5ef', padding: 20, paddingTop: 52 },
+  title: { color: '#1b4332', fontSize: 26, fontWeight: '700', marginBottom: 18 },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#d8ddd8', marginBottom: 12 },
+  tab: { paddingVertical: 12, paddingHorizontal: 16, marginRight: 8 },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#2d6a4f' },
+  tabText: { color: '#475569', fontWeight: '600' },
+  activeTabText: { color: '#1b4332' },
+  list: { paddingBottom: 24 },
+  emptyList: { flexGrow: 1, justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  message: { color: '#475569', textAlign: 'center', padding: 24, lineHeight: 22 },
+  card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginVertical: 7, borderWidth: 1, borderColor: '#e5e7eb' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  routeName: { flex: 1, color: '#1b4332', fontSize: 17, fontWeight: '700' },
+  status: { color: '#8a4b08', fontWeight: '700', textTransform: 'capitalize' },
+  accepted: { color: '#2d6a4f' },
+  detail: { color: '#475569', marginVertical: 3 },
+  actions: { flexDirection: 'row', marginTop: 12, gap: 10 },
+  actionButton: { flex: 1, borderRadius: 9, padding: 12, alignItems: 'center' },
+  acceptButton: { backgroundColor: '#2d6a4f' },
+  rejectButton: { borderWidth: 1, borderColor: '#b42318' },
+  actionText: { color: 'white', fontWeight: '700' },
+  rejectText: { color: '#b42318', fontWeight: '700' },
 });
 
 export default DriverHistoryScreen;

@@ -5,13 +5,13 @@ export default StyleSheet.create({
       flex: 1,
       justifyContent: 'center',
       padding: 20,
-      backgroundColor: '#fff',
+      backgroundColor: '#f7f5ef',
     },
     header: {
       fontSize: 24,
       fontWeight: 'bold',
       textAlign: 'center',
-      color: 'black',
+      color: '#1b4332',
       marginBottom: 20,
     },
     userTypeContainer: {
@@ -24,9 +24,9 @@ export default StyleSheet.create({
       padding: 10,
       marginHorizontal: 5,
       borderWidth: 1,
-      borderColor: 'black',
-      borderRadius: 5,
-      backgroundColor: 'black',
+      borderColor: '#b8c5bb',
+      borderRadius: 10,
+      backgroundColor: '#1b4332',
     },
     buttonText: {
       color: 'white',
@@ -34,12 +34,15 @@ export default StyleSheet.create({
     },
     input: {
       borderWidth: 1,
-      borderColor: 'black',
-      borderRadius: 5,
+      borderColor: '#b8c5bb',
+      borderRadius: 10,
       padding: 10,
       marginVertical: 5,
       color: 'black',
-      width: 300
+      width: '100%',
+      maxWidth: 420,
+      minHeight: 48,
+      backgroundColor: 'white',
     },
     inputContainer:{
       display: 'flex',

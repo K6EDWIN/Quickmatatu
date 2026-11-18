@@ -12,22 +12,14 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
-      "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_KEY"
-      }
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.otogano.QuickMatatu",
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_KEY"
-        }
-      }
+      "package": "com.otogano.QuickMatatu"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,6 +29,9 @@
       "eas": {
         "projectId": "b49c3150-53a3-4fe7-b680-3acd5462bfe2"
       }
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

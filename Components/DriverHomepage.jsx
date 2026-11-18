@@ -1,74 +1,94 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
 import Map from './Map';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Foundation from 'react-native-vector-icons/Foundation';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
+import { apiRequest } from './api';
 
 const DriverHomepage = ({ navigation }) => {
   const [isOnline, setIsOnline] = useState(false);
-  const locationInterval = useRef(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationWarning, setLocationWarning] = useState('');
+  const locationSubscription = useRef(null);
 
-  // Helper to get API URL
-  const getApiUrl = () => {
-    let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-    return url.replace(/\/$/, '');
+  const notify = (title, message) => {
+    if (Platform.OS === 'web') window.alert(`${title}: ${message}`);
+    else Alert.alert(title, message);
   };
 
   const toggleOnlineStatus = async () => {
+    if (locationLoading) return;
+    setLocationLoading(true);
     if (isOnline) {
-      // Go Offline
-      if (locationInterval.current) clearInterval(locationInterval.current);
+      setLocationWarning('');
+      locationSubscription.current?.remove();
+      locationSubscription.current = null;
       setIsOnline(false);
-      Alert.alert("Offline", "You are no longer sharing your location.");
+      try {
+        await apiRequest('/driver/location', { method: 'DELETE' });
+        notify("Offline", "Location sharing has stopped.");
+      } catch (error) {
+        notify("Location sharing stopped", error.message || "The server could not be updated; your last location will expire automatically.");
+      } finally {
+        setLocationLoading(false);
+      }
     } else {
-      // Go Online
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert("Permission Denied", "Location permission is required to go online.");
-        return;
-      }
-
-      setIsOnline(true);
-      Alert.alert("Online", "You are now visible to commuters.");
-      
-      // Start sending location immediately, then every 10s
-      sendLocationUpdate();
-      locationInterval.current = setInterval(sendLocationUpdate, 10000); 
-    }
-  };
-
-  const sendLocationUpdate = async () => {
-    try {
-      const location = await Location.getCurrentPositionAsync({});
-      const userSession = await AsyncStorage.getItem('userSession');
-      const user = userSession ? JSON.parse(userSession) : null;
-
-      if (user && user.id) {
-        await fetch(`${getApiUrl()}/api/update-location`, {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          notify("Permission denied", "Location permission is required to share your position.");
+          return;
+        }
+        const location = await Location.getCurrentPositionAsync({});
+        await apiRequest('/driver/location', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            driver_id: user.id,
             latitude: location.coords.latitude,
-            longitude: location.coords.longitude
-          })
+            longitude: location.coords.longitude,
+          }),
         });
-        console.log("Location sent successfully");
+        locationSubscription.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 25 },
+          (nextLocation) => {
+            apiRequest('/driver/location', {
+              method: 'POST',
+              body: JSON.stringify({
+                latitude: nextLocation.coords.latitude,
+                longitude: nextLocation.coords.longitude,
+              }),
+            }).catch((error) => {
+              setLocationWarning('Location updates have stopped reaching the server. Your last location will expire automatically.');
+              console.error('Unable to update driver location:', error);
+            });
+          },
+        );
+        setLocationWarning('');
+        setIsOnline(true);
+        notify("Location sharing on", "Your recent location is visible to commuters. This is not a live ETA or vehicle assignment.");
+      } catch (error) {
+        locationSubscription.current?.remove();
+        locationSubscription.current = null;
+        await apiRequest('/driver/location', { method: 'DELETE' }).catch((cleanupError) => {
+          console.error('Unable to clear driver location after start failure:', cleanupError);
+        });
+        notify("Unable to share location", error.message || "Check location permissions and your network, then try again.");
+      } finally {
+        setLocationLoading(false);
       }
-    } catch (error) {
-      console.error("Error sending location:", error);
     }
   };
 
-  // Cleanup interval on unmount
   useEffect(() => {
     return () => {
-      if (locationInterval.current) clearInterval(locationInterval.current);
+      locationSubscription.current?.remove();
+      if (isOnline) {
+        apiRequest('/driver/location', { method: 'DELETE' })
+          .catch((error) => console.error('Unable to mark driver offline:', error));
+      }
     };
-  }, []);
+  }, [isOnline]);
 
   return (
     <View style={styles.container}>
@@ -80,18 +100,20 @@ const DriverHomepage = ({ navigation }) => {
          {/* Driver Control Panel Overlay */}
          <View style={styles.controlPanel}>
             <Text style={styles.statusText}>
-                Status: <Text style={{color: isOnline ? 'green' : 'red', fontWeight:'bold'}}>
+                Status: <Text style={{color: isOnline ? '#2d6a4f' : '#647067', fontWeight:'bold'}}>
                     {isOnline ? "ONLINE" : "OFFLINE"}
                 </Text>
             </Text>
+            {!!locationWarning && <Text style={styles.locationWarning}>{locationWarning}</Text>}
             
-            <TouchableOpacity 
-                style={[styles.onlineButton, {backgroundColor: isOnline ? '#d9534f' : '#5cb85c'}]}
+            <TouchableOpacity
+                style={[styles.onlineButton, {backgroundColor: isOnline ? '#b42318' : '#2d6a4f'}]}
                 onPress={toggleOnlineStatus}
+                disabled={locationLoading}
             >
-                <Text style={styles.buttonText}>
-                    {isOnline ? "STOP SHARING" : "GO ONLINE"}
-                </Text>
+                {locationLoading ? <ActivityIndicator color="white" /> : (
+                  <Text style={styles.buttonText}>{isOnline ? "STOP SHARING" : "GO ONLINE"}</Text>
+                )}
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -118,7 +140,7 @@ const DriverHomepage = ({ navigation }) => {
             </TouchableOpacity>
         </View>
         <View style={styles.icons}>
-            <TouchableOpacity onPress={()=>{navigation.navigate("UserAccount",{name: 'Driver'})}}>
+            <TouchableOpacity onPress={()=>{navigation.navigate("Account",{name: 'Driver'})}}>
                 <AntDesign name='user' size={24} color='rgb(107,107,107)' style={styles.icon}/>
                 <Text>Account</Text>
             </TouchableOpacity>
@@ -170,10 +192,11 @@ const styles = StyleSheet.create({
     height: 80,
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: 'rgb(207,220,255)'
+    backgroundColor: '#f7f5ef'
   },
   icons: { alignItems: 'center' },
-  icon: { paddingLeft: 11, marginBottom: 5 }
+  icon: { paddingLeft: 11, marginBottom: 5 },
+  locationWarning: { color: '#b42318', marginBottom: 10, textAlign: 'center' }
 });
 
 export default DriverHomepage;

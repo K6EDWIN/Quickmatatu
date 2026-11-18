@@ -1,29 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
+import * as sessionStore from './sessionStore';
+import { apiRequest } from './api';
 
-const HistoryScreenUser = ({ navigation }) => {
+const HistoryScreenUser = () => {
     const [bookings, setBookings] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
-
-    const getApiUrl = () => {
-        let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-        return url.replace(/\/$/, '');
-    };
+    const [error, setError] = useState('');
+    const [hasSession, setHasSession] = useState(true);
 
     const fetchHistory = async () => {
         setRefreshing(true);
         try {
-            const session = await AsyncStorage.getItem('userSession');
-            if (!session) return;
+            const session = await sessionStore.getItem('userSession');
+            if (!session) {
+                setHasSession(false);
+                setBookings([]);
+                return;
+            }
             const user = JSON.parse(session);
-
-            const response = await fetch(`${getApiUrl()}/api/user/bookings/${user.id}`);
-            const data = await response.json();
-            if (Array.isArray(data)) setBookings(data);
+            const data = await apiRequest(`/user/bookings/${user.id}`);
+            if (!Array.isArray(data)) throw new Error('Booking history is unavailable.');
+            setHasSession(true);
+            setError('');
+            setBookings(data);
         } catch (error) {
             console.error(error);
+            setError(error.message || 'Unable to load your rides.');
         } finally {
             setRefreshing(false);
         }
@@ -31,14 +34,15 @@ const HistoryScreenUser = ({ navigation }) => {
 
     const cancelBooking = async (ticketId) => {
         try {
-            await fetch(`${getApiUrl()}/api/update-booking-status`, {
+            await apiRequest('/update-booking-status', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticket_id: ticketId, status: 'cancelled' })
+                body: JSON.stringify({ ticket_id: ticketId, status: 'cancelled' }),
             });
             fetchHistory(); // Refresh list
-        } catch (error) {
-            Alert.alert("Error", "Could not cancel booking.");
+        } catch (requestError) {
+            const message = requestError.message || "Could not cancel booking.";
+            if (Platform.OS === 'web') window.alert(message);
+            else Alert.alert("Error", message);
         }
     };
 
@@ -49,10 +53,10 @@ const HistoryScreenUser = ({ navigation }) => {
             <View style={styles.header}>
                 <Text style={styles.date}>{new Date(item.booking_time).toLocaleDateString()} - {new Date(item.booking_time).toLocaleTimeString()}</Text>
                 <Text style={[styles.status, 
-                    item.status === 'accepted' ? { color: 'green' } : 
-                    item.status === 'cancelled' ? { color: 'red' } : { color: 'orange' }
+                    item.status === 'accepted' ? { color: '#2d6a4f' } :
+                    ['cancelled', 'rejected'].includes(item.status) ? { color: '#b42318' } : { color: '#8a4b08' }
                 ]}>
-                    {item.status.toUpperCase()}
+                    {item.status === 'accepted' ? 'ACCEPTED · SEAT NOT VERIFIED' : item.status.toUpperCase()}
                 </Text>
             </View>
             <Text style={styles.route}>{item.route_name}</Text>
@@ -74,29 +78,26 @@ const HistoryScreenUser = ({ navigation }) => {
                 renderItem={renderItem}
                 keyExtractor={item => item.ticket_id.toString()}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchHistory} />}
-                ListEmptyComponent={<Text style={styles.empty}>No ride history found.</Text>}
+                ListEmptyComponent={<Text style={styles.empty}>
+                    {error || (refreshing ? 'Loading ride requests…' : !hasSession ? 'Log in to view your rides.' : 'No ride requests yet.')}
+                </Text>}
             />
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                <Text style={styles.backText}>Back</Text>
-            </TouchableOpacity>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f8f9fa', paddingTop: 50 },
-    title: { fontSize: 28, fontWeight: 'bold', marginBottom: 20 },
+    container: { flex: 1, padding: 20, backgroundColor: '#f7f5ef', paddingTop: 50 },
+    title: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, color: '#1b4332' },
     card: { backgroundColor: 'white', padding: 15, borderRadius: 10, marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.1, elevation: 3 },
     header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
     date: { color: '#888', fontSize: 12 },
     status: { fontWeight: 'bold', fontSize: 12 },
-    route: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
+    route: { fontSize: 18, fontWeight: 'bold', marginBottom: 5, color: '#1b4332' },
     point: { fontSize: 14, color: '#555', marginBottom: 10 },
-    cancelBtn: { padding: 10, backgroundColor: '#ffebee', borderRadius: 5, alignItems: 'center' },
-    cancelText: { color: '#d32f2f', fontWeight: 'bold' },
-    empty: { textAlign: 'center', marginTop: 50, color: '#aaa' },
-    backButton: { marginTop: 10, padding: 15, backgroundColor: 'black', borderRadius: 10, alignItems: 'center' },
-    backText: { color: 'white', fontWeight: 'bold' }
+    empty: { textAlign: 'center', marginTop: 50, color: '#475569' },
+    cancelBtn: { padding: 10, backgroundColor: '#fff2f0', borderRadius: 8, alignItems: 'center', minHeight: 44 },
+    cancelText: { color: '#b42318', fontWeight: 'bold' }
 });
 
 export default HistoryScreenUser;
