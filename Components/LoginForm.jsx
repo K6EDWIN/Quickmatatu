@@ -3,9 +3,10 @@ import { View, Text, TextInput, Button, TouchableOpacity, Alert, Platform, Activ
 import * as sessionStore from './sessionStore';
 import styles from "../Styles";
 import { getApiBaseUrl } from './api';
+import GoogleSignInButton from './GoogleSignInButton';
 
-const LoginForm = ({ navigation }) => {
-  const [email, setEmail] = useState("");
+const LoginForm = ({ navigation, route }) => {
+  const [email, setEmail] = useState(route.params?.email || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -78,6 +79,10 @@ const LoginForm = ({ navigation }) => {
           autoCapitalize="none"
         />
 
+        <TouchableOpacity onPress={() => navigation.navigate('PasswordRecovery', { email })}>
+          <Text style={styles.linkText}>Forgot your password?</Text>
+        </TouchableOpacity>
+
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -106,6 +111,11 @@ const LoginForm = ({ navigation }) => {
         >
           <Text style={styles.linkText}>Don't have an account? Register Now</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('VerifyEmail', { email })}>
+          <Text style={styles.linkText}>Resend verification code</Text>
+        </TouchableOpacity>
+        <Text style={{ color: '#647067', marginTop: 16, textAlign: 'center' }}>or</Text>
+        <GoogleSignInButton navigation={navigation} disabled={loading} />
       </View>
     </View>
   );

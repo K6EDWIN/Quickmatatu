@@ -8,8 +8,16 @@ function configureMaps(platformConfig, apiKey) {
   return result;
 }
 
-module.exports = ({ config }) => ({
-  ...config,
-  ios: configureMaps(config.ios || {}, process.env.GOOGLE_MAPS_IOS_API_KEY),
-  android: configureMaps(config.android || {}, process.env.GOOGLE_MAPS_ANDROID_API_KEY),
-});
+module.exports = ({ config }) => {
+  const ios = configureMaps(config.ios || {}, process.env.GOOGLE_MAPS_IOS_API_KEY);
+  if (process.env.IOS_BUNDLE_IDENTIFIER) ios.bundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER;
+  const redirectScheme = process.env.EXPO_PUBLIC_GOOGLE_NATIVE_REDIRECT_URI?.split(':')[0];
+
+  return {
+    ...config,
+    scheme: redirectScheme || config.scheme || 'quickmatatu',
+    plugins: [...(config.plugins || []), 'expo-web-browser'],
+    ios,
+    android: configureMaps(config.android || {}, process.env.GOOGLE_MAPS_ANDROID_API_KEY),
+  };
+};
