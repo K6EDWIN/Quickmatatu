@@ -8,6 +8,8 @@ import LoginForm from "./Components/LoginForm";
 import RegistrationForm from "./Components/Registration";
 import WelcomeScreen from './Components/WelcomeScreen';
 import DriverHomepage from './Components/DriverHomepage';
+import DriverHistoryScreen from './Components/HistoryScreenDriver';
+import AccountScreen from './Components/AccountScreen';
 
 // Import the new Tab Navigator
 import MainTabs from './Components/MainTabs';
@@ -38,8 +40,6 @@ const App = () => {
           component={LoginForm} 
           options={{ headerTitle: "Login" }}
         />
-        {}        
-        {}
         <Stack.Screen 
           name="UserHomepage" 
           component={MainTabs} 
@@ -47,6 +47,8 @@ const App = () => {
         />
 
         <Stack.Screen name="DriverHomepage" component={DriverHomepage} />
+        <Stack.Screen name="HistoryScreenDriver" component={DriverHistoryScreen} options={{ title: 'Driver bookings' }} />
+        <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
         
       </Stack.Navigator>
     </NavigationContainer>

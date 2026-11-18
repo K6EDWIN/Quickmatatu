@@ -1,39 +1,46 @@
-# 🚐 Quick Matatu
+# QuickMatatu
 
-[![React Native](https://img.shields.io/badge/React%20Native-0.72-blue.svg)](https://reactnative.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+QuickMatatu is an Expo/React Native client backed by an Express API and a Turso (LibSQL) database. It has separate commuter and driver experiences.
 
-A mobile application designed to enhance the reliability and efficiency of Kenya's matatu transport system, complete with a prototype GUI built using **React Native**. This project was developed as a deep dive into software engineering and real-world problem-solving for urban mobility.
+## Current capabilities and limits
 
-It supports core features for both commuters and matatu operators, designed to optimize schedules, reduce wait times, and increase profitability.
+- Commuters can choose a starting point and destination from route records with non-empty endpoints, submit a ride request, review their own requests, and cancel a pending request.
+- Drivers can share their foreground location while online, view unassigned pending requests, accept or decline requests, and view their assigned request history.
+- Booking actions are authenticated and role/owner checked by the API. A submitted request remains pending until a driver accepts it.
+- The map can display the user's current position and driver locations updated in the last five minutes. These locations are not vehicle assignments or arrival-time predictions.
+- Routes with missing start or end points are omitted. Route endpoints are not independently verified boarding stops. No routes, stops, fares, seat capacity, payments, live ETAs, notifications, or operator verification are created or inferred by the app.
+- Driver registration collects driver and vehicle details, but entering those details does not verify a driver or vehicle.
 
-## ✨ Features
+## Run locally
 
-The system is designed with two primary user types: Commuters and Drivers.
+Install dependencies with `npm ci`, then run:
 
-### For Commuters
-* **User Registration:** Register for an account using an email, username, and password.
-* **Live Location Tracking:** View the real-time GPS location of matatus on your selected route.
-* **View ETAs:** See the approximate arrival time for matatus approaching your pick-up stage.
-* **Book a Matatu:** Select and book a seat on your preferred matatu.
-* **Cancel Bookings:** Ability to cancel a booking if your plans change.
-* **Rate & Review:** Rate your ride experience after completion to provide feedback.
+```sh
+npm test
+npm run start
+```
 
-### For Drivers
-* **Secure Registration:** A verified registration process requiring an ID number, driver's license, and car number plate.
-* **Live Location Sharing:** Drivers can share their location when active and stop sharing when the matatu is full.
-* **Booking Management:** Receive real-time booking notifications from commuters.
-* **Confirm/Cancel Bookings:** Accept or reject incoming booking requests based on vehicle capacity.
+The web export is `npm run build`. A local API runs with `node server.js` after the API environment is configured.
 
-## ⚙️ System Architecture
+## Configuration prerequisites
 
-The core of this application is an **algorithm** that aggregates preferred departure times from multiple commuters to calculate the most optimal and convenient pickup times for both commuters and operators.
+Provide these values outside source control:
 
-This system is built on a high-level design consisting of several key components:
+| Variable | Purpose |
+| --- | --- |
+| `TURSO_DATABASE_URL` | Turso database URL for the API |
+| `TURSO_AUTH_TOKEN` | Database access token |
+| `SESSION_SECRET` | At least 32 characters in production; signs seven-day API tokens |
+| `EXPO_PUBLIC_API_URL` | API origin used by the app; defaults to `http://localhost:3001` |
+| `EXPO_PUBLIC_WEB_ORIGIN` | Deployed web-app origin allowed by API CORS |
+| `EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN` | Restricted public Mapbox token required by the driver's native map |
+| `GOOGLE_MAPS_ANDROID_API_KEY` | Android map key, if required by the configured native map provider |
+| `GOOGLE_MAPS_IOS_API_KEY` | iOS Google Maps key, if Google Maps is selected instead of the platform default |
 
-* **User Interface (React Native):** The mobile front-end for both commuters and drivers.
-* **Authentication & User Management:** Securely handles user registration, login, and profile management.
-* **Matatu Location Tracking:** Uses GPS services to track and share real-time vehicle locations.
-* **Booking & Ride Management:** Manages all booking requests, confirmations, and cancellations.
-* **Backend API Services:** Acts as the central communication hub between the mobile app and the database.
-* **Database:** Stores all user data, route information, and booking details.
+Production API startup fails closed if the database credentials or `SESSION_SECRET` are missing. Native tokens are stored with SecureStore; browser tokens use tab-scoped session storage. Logout revokes outstanding tokens for that account. The Expo native map keys are injected from the environment; no provider credentials are committed here. Browser-based route and booking flows do not require a map provider key.
+
+The API initializes its schema at startup and adds the driver details, booking assignment, and token-version columns needed by current flows. Apply and verify schema changes through the normal database change process before production rollout; this repository change does not connect to or alter a live database.
+
+## Roadmap prerequisites
+
+Authoritative route/stage data and stewardship, fares, seat/capacity management, operator assignment and verification, background location policy, live ETA methodology, payment provider configuration, notification delivery, and production app signing remain external product/infrastructure work. Until implemented and supplied, the app must not present them as available.

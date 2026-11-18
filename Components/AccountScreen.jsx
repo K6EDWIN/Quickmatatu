@@ -1,55 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { heightPercentageToDP as hp } from 'react-native-responsive-screen';
+import * as sessionStore from './sessionStore';
+import { apiRequest } from './api';
 
 export default function AccountScreen({ route, navigation }) {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState('');
   
   // Default to commuter if not passed, but we will check Storage too
   const [userType, setUserType] = useState(route.params?.name || 'commuter'); 
 
-  const getApiUrl = () => {
-    let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-    return url.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api';
-  };
-
   useEffect(() => {
     const fetchUserData = async () => {
         try {
-            // 1. Try to get user from AsyncStorage first (Most Reliable)
-            const jsonValue = await AsyncStorage.getItem('userSession');
-            let userId = null;
-
-            if (jsonValue != null) {
+            const jsonValue = await sessionStore.getItem('userSession');
+            if (jsonValue) {
                 const user = JSON.parse(jsonValue);
-                userId = user.id;
                 setUserType(user.userType || 'commuter');
-            } 
-
-            // 2. If we have an ID, fetch the full profile from the server
-            if (userId) {
-                const response = await fetch(`${getApiUrl()}/users/${userId}`);
-                const data = await response.json();
-
-                if (response.ok) {
-                    setProfileData(data);
-                } else {
-                    console.log("Failed to fetch full profile:", data.error);
-                }
-            } else {
-                // If no storage, try the session endpoint as a backup
-                const response = await fetch(`${getApiUrl()}/get_user`, { credentials: 'include' });
-                const data = await response.json();
-                if (response.ok && data.user) {
-                     setProfileData(data.user);
-                     setUserType(data.user.userType);
-                }
             }
+            const profile = await apiRequest('/users/me');
+            setProfileData(profile);
+            setUserType(profile.userType);
+            setProfileError('');
         } catch (error) {
             console.error('Error fetching user data:', error);
+            setProfileError(error.message || 'Unable to load your account.');
         } finally {
             setLoading(false);
         }
@@ -60,20 +38,14 @@ export default function AccountScreen({ route, navigation }) {
 
   const handleLogout = async () => {
     try {
-        // 1. Clear Local Storage
-        await AsyncStorage.removeItem('userSession');
-        
-        // 2. Call Logout API
-        await fetch(`${getApiUrl()}/logout`, { method: 'POST', credentials: 'include' });
-
-        // 3. Navigate to Login (resetting stack so you can't go back)
-        navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-        });
+        await apiRequest('/logout', { method: 'POST' });
     } catch (e) {
-        console.error("Logout failed", e);
-        navigation.navigate('Login');
+        console.error('Logout request failed; clearing the local session:', e);
+    } finally {
+        await sessionStore.removeItem('userSession');
+        let rootNavigation = navigation;
+        while (rootNavigation.getParent()) rootNavigation = rootNavigation.getParent();
+        rootNavigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     }
   };
 
@@ -92,7 +64,7 @@ export default function AccountScreen({ route, navigation }) {
 
   const OptionItem = ({ icon, label, description, onPress }) => (
     <TouchableOpacity style={styles.optionItem} onPress={onPress}>
-      <MaterialIcons name={icon} size={hp('4%')} color="black" />
+      <MaterialIcons name={icon} size={hp('4%')} color="#1b4332" />
       <View style={styles.optionTextContainer}>
         <Text style={styles.optionLabel}>{label}</Text>
         <Text style={styles.optionDescription}>{description}</Text>
@@ -119,6 +91,7 @@ export default function AccountScreen({ route, navigation }) {
           </View>
           <Text style={styles.username}>{profileData?.username || 'Guest'}</Text>
           <Text style={{ color: 'gray' }}>{profileData?.email}</Text>
+          {!!profileError && <Text style={styles.profileError}>{profileError}</Text>}
         </View>
 
         <View style={styles.optionsContainer}>
@@ -132,19 +105,9 @@ export default function AccountScreen({ route, navigation }) {
             icon="history" 
             label="History" 
             description="View your past trips" 
-            onPress={() => navigation.navigate(userType === 'driver' ? 'HistoryScreenDriver' : 'HistoryScreenUser')}
-          />
-          <OptionItem 
-            icon="help-outline" 
-            label="Help" 
-            description="Contact customer support" 
-            onPress={() => Alert.alert("Help", "Contact support at support@quickmatatu.com")}
-          />
-          <OptionItem 
-            icon="settings" 
-            label="Settings" 
-            description="App preferences" 
-            onPress={() => Alert.alert("Settings", "Settings coming soon!")}
+            onPress={() => userType === 'driver'
+              ? navigation.navigate('HistoryScreenDriver')
+              : navigation.navigate('History')}
           />
         </View>
 
@@ -159,7 +122,7 @@ export default function AccountScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f7f5ef',
   },
   scrollContent: {
     flexGrow: 1,
@@ -181,7 +144,7 @@ const styles = StyleSheet.create({
   username: {
     fontSize: hp('3%'),
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1b4332',
   },
   optionsContainer: {
     width: '90%',
@@ -232,4 +195,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  profileError: { color: '#b42318', marginTop: 10, textAlign: 'center' },
 });

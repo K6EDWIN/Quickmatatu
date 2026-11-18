@@ -16,16 +16,16 @@ export default function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false, // We hide the tab header because screens have their own
-        tabBarActiveTintColor: 'blue',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#1b4332',
+        tabBarInactiveTintColor: '#647067',
         tabBarStyle: {
-          height: 60,
+          height: 64,
           paddingBottom: 5,
           paddingTop: 5,
+          backgroundColor: '#f7f5ef',
+          borderTopColor: '#d8ddd8',
         },
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
           if (route.name === 'Home') {
             return <MaterialIcons name="home" size={30} color={color} />;
           } else if (route.name === 'History') {

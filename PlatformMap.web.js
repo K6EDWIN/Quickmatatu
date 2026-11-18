@@ -6,7 +6,7 @@ import { View, StyleSheet } from 'react-native';
 // Dynamically inject Leaflet CSS + JS if not present, then render map into a div
 const PlatformMap = ({
   style,
-  initialCoordinates = { latitude: -1.2921, longitude: 36.8219 }, // Nairobi default
+  initialCoordinates,
   zoom = 13,
   markers = [], // [{ latitude, longitude, title, color }]
   onMapReady,
@@ -97,12 +97,16 @@ const PlatformMap = ({
   }, [markers]);
 
   const addMarkerToMap = (L, map, { latitude, longitude, title, color }) => {
-    if (!latitude || !longitude) return null;
+    if (latitude === null || latitude === undefined || String(latitude).trim() === ''
+      || longitude === null || longitude === undefined || String(longitude).trim() === ''
+      || !Number.isFinite(Number(latitude)) || Number(latitude) < -90 || Number(latitude) > 90
+      || !Number.isFinite(Number(longitude)) || Number(longitude) < -180 || Number(longitude) > 180) return null;
+    const markerColor = typeof color === 'string' && /^#[\da-f]{6}$/i.test(color) ? color : '#e63946';
 
     const iconHtml = `
       <div style="
         width: 28px; height: 28px; border-radius: 50% 50% 50% 0;
-        background: ${color || '#e63946'};
+        background: ${markerColor};
         border: 3px solid white;
         transform: rotate(-45deg);
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -118,7 +122,11 @@ const PlatformMap = ({
     });
 
     const marker = L.marker([latitude, longitude], { icon });
-    if (title) marker.bindPopup(`<strong>${title}</strong>`);
+    if (title) {
+      const popup = document.createElement('strong');
+      popup.textContent = String(title);
+      marker.bindPopup(popup);
+    }
     marker.addTo(map);
     return marker;
   };

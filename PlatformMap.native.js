@@ -6,7 +6,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
 const PlatformMap = ({
   style,
-  initialCoordinates = { latitude: -1.2921, longitude: 36.8219 }, // Nairobi default
+  initialCoordinates,
   zoom = 13,
   markers = [], // [{ latitude, longitude, title, color }]
   onMapReady,

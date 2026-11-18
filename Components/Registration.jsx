@@ -16,14 +16,6 @@ const RegistrationForm = ({ navigation }) => {
   const [isSuccess, setIsSuccess] = useState(false); // New state for success view
   const [visibleComponent, setVisibleComponent] = useState('CommuterRegistration');
 
-  // SAFE API URL LOGIC
-  const getApiUrl = () => {
-    let url = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001';
-    // Remove duplicated /api/register paths if they exist in env var
-    const baseUrl = url.replace(/\/api\/register\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
-    return `${baseUrl}/api/register`;
-  };
-
   const notify = (title, message) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}: ${message}`);
@@ -35,8 +27,7 @@ const RegistrationForm = ({ navigation }) => {
   const renderInputs = () => {
     if (visibleComponent === 'CommuterRegistration') {
       return (
-        <View style={styles.container}>
-          <View style={styles.inputContainer}>
+        <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
               placeholder="Username"
@@ -61,13 +52,11 @@ const RegistrationForm = ({ navigation }) => {
               value={password}
               secureTextEntry
             />
-          </View>
         </View>
       );
     } else if (visibleComponent === 'DriverRegistration') {
       return (
-        <View style={styles.container}>
-          <View style={styles.inputContainer}>
+        <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
               placeholder="Username"
@@ -84,7 +73,7 @@ const RegistrationForm = ({ navigation }) => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email (Optional)"
+              placeholder="Email"
               placeholderTextColor="#aaa"
               onChangeText={setEmail}
               value={email}
@@ -121,22 +110,23 @@ const RegistrationForm = ({ navigation }) => {
               value={nationalId}
               keyboardType="numeric"
             />
-          </View>
         </View>
       );
     }
   };
 
   const handleRegister = async () => {
-    if (!username || !password) {
-      notify("Missing Info", "Please enter a username and password.");
+    if (username.trim().length < 2 || !email.trim() || password.length < 8) {
+      notify("Check your details", "Enter a name, valid email, and password with at least 8 characters.");
+      return;
+    }
+    if (userType === 'driver'
+      && (!driverName.trim() || !vehicleLicensePlate.trim() || !license.trim() || !nationalId.trim())) {
+      notify("Missing driver details", "Enter your name, vehicle registration, licence, and national ID.");
       return;
     }
 
     setLoading(true);
-    const API_ENDPOINT = getApiUrl();
-    console.log("Registering to:", API_ENDPOINT);
-
     const userData = {
       userType,
       username,
@@ -149,21 +139,15 @@ const RegistrationForm = ({ navigation }) => {
     };
 
     try {
-      const response = await fetch(API_ENDPOINT, {
+      const baseUrl = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001')
+        .replace(/\/api\/register\/?$/, '').replace(/\/api\/?$/, '').replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
 
-      const text = await response.text();
-      console.log("Server raw response:", text);
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        throw new Error(`Server Error (Not JSON): ${text.substring(0, 50)}`);
-      }
+      const data = await response.json();
 
       if (response.ok) {
         // SUCCESS: Show spinner screen instead of Alert
@@ -182,7 +166,7 @@ const RegistrationForm = ({ navigation }) => {
 
     } catch (error) {
       console.error('Registration Error:', error);
-      notify('Connection Error', error.message);
+      notify('Connection Error', error.message || 'Unable to connect to the server.');
       setLoading(false);
     }
   };
@@ -195,7 +179,7 @@ const RegistrationForm = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.button, 
-              { backgroundColor: userType === 'commuter' ? 'black' : 'grey' }
+              { backgroundColor: userType === 'commuter' ? '#1b4332' : '#718096' }
             ]}
             onPress={() => {
               setVisibleComponent('CommuterRegistration');
@@ -207,7 +191,7 @@ const RegistrationForm = ({ navigation }) => {
           <TouchableOpacity
             style={[
               styles.button,
-              { backgroundColor: userType === 'driver' ? 'black' : 'grey' }
+              { backgroundColor: userType === 'driver' ? '#1b4332' : '#718096' }
             ]}
             onPress={() => {
               setVisibleComponent('DriverRegistration');
@@ -225,7 +209,7 @@ const RegistrationForm = ({ navigation }) => {
   if (isSuccess) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="black" />
+          <ActivityIndicator size="large" color="#1b4332" />
           <Text style={{ marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>
               Registration Successful!
           </Text>
@@ -251,7 +235,7 @@ const RegistrationForm = ({ navigation }) => {
             <Button
               title="Register"
               onPress={handleRegister}
-              color="black"
+              color="#1b4332"
               style={styles.submitButton}
             />
           )}
